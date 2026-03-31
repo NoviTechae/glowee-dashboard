@@ -1,0 +1,13 @@
+# env files
+.env
+.env.*
+.env.local
+
+# next
+.next/
+
+# dependencies
+node_modules/
+
+# logs
+*.log
