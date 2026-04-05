@@ -28,16 +28,36 @@ export default function AdminCreateSalonPage() {
 
   const [salonType, setSalonType] = useState<SalonType>(initialType);
 
-  // Step 1 - basic salon info only
+  // Step 1 - basic salon info
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+
+  // ✅ internal branch info for home service
+  const [city, setCity] = useState("");
+  const [area, setArea] = useState("");
+  const [addressLine, setAddressLine] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
 
   // Step 2 - account
   const [accountEmail, setAccountEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const canGoNext = useMemo(() => name.trim().length >= 2, [name]);
+  const isHome = salonType === "home";
+
+  const canGoNext = useMemo(() => {
+    if (name.trim().length < 2) return false;
+
+    if (isHome) {
+      if (!city.trim()) return false;
+      if (!area.trim()) return false;
+      if (lat.trim() === "" || lng.trim() === "") return false;
+    }
+
+    return true;
+  }, [name, isHome, city, area, lat, lng]);
+
   const canSubmit = useMemo(
     () => accountEmail.trim().includes("@") && password.length >= 6,
     [accountEmail, password]
@@ -46,7 +66,7 @@ export default function AdminCreateSalonPage() {
   function nextStep() {
     setErr("");
 
-    if (!canGoNext) {
+    if (name.trim().length < 2) {
       setErr("Please enter a salon name (min 2 chars).");
       return;
     }
@@ -54,6 +74,25 @@ export default function AdminCreateSalonPage() {
     if (email.trim() && !email.includes("@")) {
       setErr("Please enter a valid salon email.");
       return;
+    }
+
+    if (isHome) {
+      if (!city.trim()) {
+        setErr("Please enter city for home service.");
+        return;
+      }
+      if (!area.trim()) {
+        setErr("Please enter area for home service.");
+        return;
+      }
+      if (lat.trim() === "" || Number.isNaN(Number(lat))) {
+        setErr("Please enter valid latitude.");
+        return;
+      }
+      if (lng.trim() === "" || Number.isNaN(Number(lng))) {
+        setErr("Please enter valid longitude.");
+        return;
+      }
     }
 
     setStep(2);
@@ -89,9 +128,25 @@ export default function AdminCreateSalonPage() {
           email: accountEmail.trim().toLowerCase(),
           password,
         },
+
+        // ✅ only for home salons
+        home_branch:
+          salonType === "home"
+            ? {
+                name: `${name.trim()} Home`,
+                country: "United Arab Emirates",
+                city: city.trim(),
+                area: area.trim(),
+                address_line: clean(addressLine),
+                lat: Number(lat),
+                lng: Number(lng),
+                supports_home_services: true,
+                is_active: true,
+              }
+            : null,
       });
 
-      router.replace("/admin/salons");
+      router.replace("/admin/home-services");
     } catch (e: any) {
       setErr(e?.message || "Create failed");
     } finally {
@@ -135,7 +190,7 @@ export default function AdminCreateSalonPage() {
                   className="w-full rounded-xl border px-4 py-3 outline-none focus:ring-2 focus:ring-pink-300"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Glowee Salon"
+                  placeholder="e.g. Glowee Home Beauty"
                 />
               </Field>
 
@@ -149,7 +204,7 @@ export default function AdminCreateSalonPage() {
                   />
                   <TypeCard
                     title="Home Service"
-                    desc="Home-based / mobile service"
+                    desc="Mobile / at customer location"
                     active={salonType === "home"}
                     onClick={() => setSalonType("home")}
                   />
@@ -166,7 +221,7 @@ export default function AdminCreateSalonPage() {
                   {salonType === "in_salon"
                     ? "Salon will manage branches."
                     : salonType === "home"
-                    ? "No branches needed. Owner can manage home services directly."
+                    ? "Home service salon will use one internal branch for city, area, map location, services, and working hours."
                     : "Salon can manage both branches and home services."}
                 </div>
               </Field>
@@ -190,6 +245,64 @@ export default function AdminCreateSalonPage() {
                   />
                 </Field>
               </div>
+
+              {isHome ? (
+                <div className="rounded-2xl border border-purple-200 bg-purple-50 p-5">
+                  <h3 className="font-bold text-purple-900">Home Service Location *</h3>
+                  <p className="mt-1 text-sm text-purple-700">
+                    This creates one internal location used for sorting by city, service setup, and working hours.
+                  </p>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <Field label="City *">
+                      <input
+                        className="w-full rounded-xl border px-4 py-3 outline-none focus:ring-2 focus:ring-pink-300"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="Abu Dhabi"
+                      />
+                    </Field>
+
+                    <Field label="Area *">
+                      <input
+                        className="w-full rounded-xl border px-4 py-3 outline-none focus:ring-2 focus:ring-pink-300"
+                        value={area}
+                        onChange={(e) => setArea(e.target.value)}
+                        placeholder="Khalidiya"
+                      />
+                    </Field>
+
+                    <Field label="Latitude *">
+                      <input
+                        className="w-full rounded-xl border px-4 py-3 outline-none focus:ring-2 focus:ring-pink-300"
+                        value={lat}
+                        onChange={(e) => setLat(e.target.value)}
+                        placeholder="24.4539"
+                      />
+                    </Field>
+
+                    <Field label="Longitude *">
+                      <input
+                        className="w-full rounded-xl border px-4 py-3 outline-none focus:ring-2 focus:ring-pink-300"
+                        value={lng}
+                        onChange={(e) => setLng(e.target.value)}
+                        placeholder="54.3773"
+                      />
+                    </Field>
+
+                    <div className="md:col-span-2">
+                      <Field label="Address Line">
+                        <input
+                          className="w-full rounded-xl border px-4 py-3 outline-none focus:ring-2 focus:ring-pink-300"
+                          value={addressLine}
+                          onChange={(e) => setAddressLine(e.target.value)}
+                          placeholder="Optional internal location note"
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded-xl border bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 Profile details like logo, cover, about, website, and Instagram will be completed later by the salon owner inside the salon dashboard.

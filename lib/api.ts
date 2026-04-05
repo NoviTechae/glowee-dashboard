@@ -138,6 +138,8 @@ export const salonApi = {
   update: (id: string, data: any) => api.put(`/dashboard/admin/salons/${id}`, data),
   delete: (id: string) => api.delete(`/dashboard/admin/salons/${id}`),
   toggleActive: (id: string) => api.patch(`/dashboard/admin/salons/${id}/toggle-active`),
+  getMe: () => api.get("/dashboard/salon/me"),
+
 };
 
 // ========== USERS API ==========

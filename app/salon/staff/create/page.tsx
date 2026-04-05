@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { branchApi, serviceApi, staffApi } from "@/lib/api";
+import { branchApi, serviceApi, staffApi, salonApi } from "@/lib/api";
 
 type Branch = {
   id: string;
@@ -17,8 +17,16 @@ type Service = {
   category_name?: string | null;
 };
 
+type SalonMe = {
+  id: string;
+  name: string;
+  salon_type?: "in_salon" | "home" | "both";
+};
+
 export default function CreateStaffPage() {
   const router = useRouter();
+
+  const [salonType, setSalonType] = useState<"in_salon" | "home" | "both" | null>(null);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -33,6 +41,8 @@ export default function CreateStaffPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const isHomeSalon = salonType === "home";
 
   const groupedServices = useMemo(() => {
     const map = new Map<string, Service[]>();
@@ -51,18 +61,23 @@ export default function CreateStaffPage() {
         setErr(null);
         setSuccess(null);
 
-        const [bRes, sRes] = await Promise.all([
+        const [meRes, bRes, sRes] = await Promise.all([
+          salonApi.getMe(),
           branchApi.getAll(),
           serviceApi.getAll(),
         ]);
 
+        const me = meRes?.salon || meRes?.data || null;
         const b = Array.isArray(bRes.data) ? bRes.data : [];
         const s = Array.isArray(sRes.data) ? sRes.data : [];
 
+        setSalonType(me?.salon_type ?? null);
         setBranches(b);
         setServices(s);
 
-        if (b.length > 0) setBranchId(b[0].id);
+        if (b.length > 0) {
+          setBranchId(b[0].id);
+        }
       } catch (e: any) {
         setErr(e?.message || "Failed to load form data");
       } finally {
@@ -79,12 +94,16 @@ export default function CreateStaffPage() {
     setSuccess(null);
 
     if (name.trim().length < 2) {
-      setErr("Staff name is too short");
+      setErr(isHomeSalon ? "Provider name is too short" : "Staff name is too short");
       return;
     }
 
     if (!branchId) {
-      setErr("Please select a branch");
+      setErr(
+        isHomeSalon
+          ? "No internal home-service record found. Please contact admin."
+          : "Please select a branch"
+      );
       return;
     }
 
@@ -108,12 +127,12 @@ export default function CreateStaffPage() {
 
       await staffApi.updateServices(staffId, selectedServiceIds);
 
-      setSuccess("Staff created successfully");
+      setSuccess(isHomeSalon ? "Provider created successfully" : "Staff created successfully");
 
       router.push("/salon/staff");
       router.refresh();
     } catch (e: any) {
-      setErr(e?.message || "Failed to create staff");
+      setErr(e?.message || "Failed to create");
     } finally {
       setSaving(false);
     }
@@ -136,10 +155,12 @@ export default function CreateStaffPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-3xl font-bold text-transparent">
-            Add Staff
+            {isHomeSalon ? "Add Provider" : "Add Staff"}
           </h1>
           <p className="mt-2 text-sm text-gray-500">
-            Create a new staff member and assign services
+            {isHomeSalon
+              ? "Create a home-service provider and assign services"
+              : "Create a new staff member and assign services"}
           </p>
         </div>
 
@@ -186,19 +207,21 @@ export default function CreateStaffPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9 9 0 1118.88 17.8M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-gray-900">Staff Details</h2>
+            <h2 className="text-xl font-bold text-gray-900">
+              {isHomeSalon ? "Provider Details" : "Staff Details"}
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Staff Name *
+                {isHomeSalon ? "Provider Name *" : "Staff Name *"}
               </label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-                placeholder="e.g. Sara"
+                placeholder={isHomeSalon ? "e.g. Sara Home Beauty" : "e.g. Sara"}
               />
             </div>
 
@@ -214,23 +237,41 @@ export default function CreateStaffPage() {
               />
             </div>
 
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Branch *
-              </label>
-              <select
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="">Select branch</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!isHomeSalon && (
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  Branch *
+                </label>
+                <select
+                  value={branchId}
+                  onChange={(e) => setBranchId(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">Select branch</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {isHomeSalon && (
+              <div className="md:col-span-2">
+                <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 text-purple-700">🏠</div>
+                    <div>
+                      <p className="font-semibold text-purple-900">Home Service Provider</p>
+                      <p className="mt-1 text-sm text-purple-700">
+                        This provider will be linked automatically to your internal home-service setup.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="md:col-span-2">
               <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-green-200 bg-green-50 p-4 transition-colors hover:bg-green-100">
@@ -243,7 +284,9 @@ export default function CreateStaffPage() {
                 <div>
                   <span className="font-semibold text-green-900">Active</span>
                   <p className="mt-1 text-xs text-green-700">
-                    Staff member is available for assignment and bookings
+                    {isHomeSalon
+                      ? "Provider is available for home-service bookings"
+                      : "Staff member is available for assignment and bookings"}
                   </p>
                 </div>
               </label>
@@ -311,7 +354,9 @@ export default function CreateStaffPage() {
             <div>
               <h3 className="mb-1 font-bold text-blue-900">Note</h3>
               <p className="text-sm text-blue-700">
-                Each staff member must be assigned to at least one service so they can appear in availability and booking flows.
+                {isHomeSalon
+                  ? "Each provider must be assigned to at least one service so they can be used in home-service bookings."
+                  : "Each staff member must be assigned to at least one service so they can appear in availability and booking flows."}
               </p>
             </div>
           </div>
@@ -345,7 +390,7 @@ export default function CreateStaffPage() {
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Create Staff
+                {isHomeSalon ? "Create Provider" : "Create Staff"}
               </>
             )}
           </button>

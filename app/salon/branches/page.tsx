@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { branchApi } from "@/lib/api";
+import { branchApi, api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
 type Branch = {
@@ -19,10 +19,17 @@ type Branch = {
   is_active: boolean;
 };
 
+type SalonMe = {
+  id: string;
+  name: string;
+  salon_type?: "in_salon" | "home" | "both";
+};
+
 export default function SalonBranchesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [salon, setSalon] = useState<SalonMe | null>(null);
   const [err, setErr] = useState("");
 
   async function load() {
@@ -30,8 +37,22 @@ export default function SalonBranchesPage() {
       setErr("");
       setLoading(true);
 
-      const res = await branchApi.getAll();
-      setBranches(Array.isArray(res.data) ? res.data : []);
+      const [meRes, branchesRes] = await Promise.all([
+        api.get("/dashboard/salon/me"),
+        branchApi.getAll(),
+      ]);
+
+      const salonData = meRes?.salon ?? null;
+      const branchData = Array.isArray(branchesRes.data) ? branchesRes.data : [];
+
+      setSalon(salonData);
+      setBranches(branchData);
+
+      // ✅ لو home salon، حوّل مباشرة لأول branch
+      if (salonData?.salon_type === "home" && branchData.length > 0) {
+        router.replace(`/salon/branches/${branchData[0].id}`);
+        return;
+      }
     } catch (e: any) {
       setErr(e?.message || "Failed to load branches");
       setBranches([]);
@@ -53,6 +74,10 @@ export default function SalonBranchesPage() {
         </div>
       </div>
     );
+  }
+
+  if (salon?.salon_type === "home") {
+    return null;
   }
 
   return (

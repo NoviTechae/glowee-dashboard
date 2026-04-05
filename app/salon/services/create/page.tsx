@@ -19,9 +19,11 @@ export default function CreateServicePage() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [isActive, setIsActive] = useState(true);
+
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +44,39 @@ export default function CreateServicePage() {
     loadCategories();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  function handleImageChange(file: File | null) {
+    setError(null);
+
+    if (!file) {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
+
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      setError("Only JPG, PNG, or WEBP images are allowed");
+      return;
+    }
+
+    if (file.size > 6 * 1024 * 1024) {
+      setError("Image must be smaller than 6MB");
+      return;
+    }
+
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -51,21 +86,31 @@ export default function CreateServicePage() {
       return;
     }
 
-    if (imageUrl && !imageUrl.startsWith("http")) {
-      setError("Image URL must start with http:// or https://");
-      return;
-    }
-
     try {
       setSaving(true);
 
-      await serviceApi.create({
+      const created = await serviceApi.create({
         name: name.trim(),
         description: description.trim() || null,
-        image_url: imageUrl.trim() || null,
+        image_url: null,
         category_id: categoryId || null,
         is_active: isActive,
       });
+
+      const serviceId =
+        created?.service?.id ||
+        created?.data?.id ||
+        created?.id;
+
+      if (!serviceId) {
+        throw new Error("Service created but missing service ID");
+      }
+
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("file", imageFile);
+        await serviceApi.uploadImage(serviceId, formData);
+      }
 
       router.push("/salon/services");
       router.refresh();
@@ -79,7 +124,6 @@ export default function CreateServicePage() {
   return (
     <div className="space-y-6 p-6">
       <div className="mx-auto max-w-3xl">
-        {/* Back */}
         <Link
           href="/salon/services"
           className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
@@ -87,7 +131,6 @@ export default function CreateServicePage() {
           ← Back to services
         </Link>
 
-        {/* Header */}
         <div className="mb-8">
           <h1 className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-3xl font-bold text-transparent">
             Add Service
@@ -97,12 +140,16 @@ export default function CreateServicePage() {
           </p>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
             <div className="flex items-center gap-3">
               <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <span className="font-medium text-red-700">{error}</span>
             </div>
@@ -110,12 +157,16 @@ export default function CreateServicePage() {
         )}
 
         <form onSubmit={onSubmit} className="space-y-6">
-          {/* Basic Information */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-6 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
                 <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
                 </svg>
               </div>
               <h2 className="text-xl font-bold text-gray-900">Basic Information</h2>
@@ -174,20 +225,39 @@ export default function CreateServicePage() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  Image URL
+                  Service Image
                 </label>
+
                 <input
-                  value={imageUrl}
-                  onChange={(e) => {
-                    setImageUrl(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="https://..."
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(e) => handleImageChange(e.target.files?.[0] || null)}
+                  className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-all file:mr-4 file:rounded-lg file:border-0 file:bg-purple-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-purple-700 hover:file:bg-purple-100 focus:border-transparent focus:ring-2 focus:ring-purple-500"
                 />
+
                 <p className="mt-2 text-xs text-gray-500">
-                  Use a public image link starting with http:// or https://
+                  Upload JPG, PNG, or WEBP. Max size 6MB.
                 </p>
+
+                {imagePreview && (
+                  <div className="mt-4">
+                    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="h-48 w-full rounded-xl object-cover"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleImageChange(null)}
+                      className="mt-3 text-sm font-semibold text-red-600 hover:text-red-700"
+                    >
+                      Remove image
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -209,11 +279,15 @@ export default function CreateServicePage() {
             </div>
           </div>
 
-          {/* Note */}
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
             <div className="flex items-start gap-3">
               <svg className="mt-0.5 h-6 w-6 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <div>
                 <h3 className="mb-1 font-bold text-blue-900">Next Step</h3>
@@ -224,7 +298,6 @@ export default function CreateServicePage() {
             </div>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-4">
             <button
               type="button"
