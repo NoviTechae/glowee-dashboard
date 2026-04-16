@@ -3,6 +3,16 @@ import { getToken, logout, isTokenExpired } from "./auth";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
+export function authHeaders(extra: HeadersInit = {}) {
+  const token = getToken();
+
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
+
 // ========== API FETCH ==========
 export async function apiFetch(
   endpoint: string,
@@ -144,10 +154,32 @@ export const salonApi = {
 
 // ========== USERS API ==========
 export const userApi = {
-  getAll: () => api.get("/dashboard/admin/users"),
+  getAll: (params?: {
+    search?: string;
+    status?: string;
+    sort?: string;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams();
+
+    if (params?.search) query.set("search", params.search);
+    if (params?.status && params.status !== "all") query.set("status", params.status);
+    if (params?.sort) query.set("sort", params.sort);
+    if (params?.limit) query.set("limit", String(params.limit));
+
+    const qs = query.toString();
+    return api.get(`/dashboard/admin/users${qs ? `?${qs}` : ""}`);
+  },
+
+  getStats: () => api.get("/dashboard/admin/users/stats"),
+
   getById: (id: string) => api.get(`/dashboard/admin/users/${id}`),
-  update: (id: string, data: any) => api.put(`/dashboard/admin/users/${id}`, data),
-  toggleBlock: (id: string) => api.post(`/dashboard/admin/users/${id}/toggle-block`),
+
+  update: (id: string, data: any) =>
+    api.put(`/dashboard/admin/users/${id}`, data),
+
+  toggleBlock: (id: string) =>
+    api.post(`/dashboard/admin/users/${id}/toggle-block`),
 };
 
 // ========== BOOKINGS API ==========
@@ -357,5 +389,38 @@ export const blockedSlotsApi = {
 
   // Delete blocked slot
   delete: (id: string) => api.delete(`/dashboard/salon/blocked-slots/${id}`),
+};
+
+
+// ========== MOBILE BANNERS API ==========
+export const bannerApi = {
+  getAll: (placement?: string) =>
+    api.get(
+      `/dashboard/admin/mobile-banners${
+        placement ? `?placement=${encodeURIComponent(placement)}` : ""
+      }`
+    ),
+
+  getById: (id: string) =>
+    api.get(`/dashboard/admin/mobile-banners/${id}`),
+
+  create: (data: any) =>
+    api.post("/dashboard/admin/mobile-banners", data),
+
+  update: (id: string, data: any) =>
+    api.put(`/dashboard/admin/mobile-banners/${id}`, data),
+
+  delete: (id: string) =>
+    api.delete(`/dashboard/admin/mobile-banners/${id}`),
+
+  reorder: (items: Array<{ id: string; sort_order: number }>) =>
+    api.post("/dashboard/admin/mobile-banners/reorder", { items }),
+
+  upload: async (file: File): Promise<{ ok: boolean; image_url: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    return api.upload("/dashboard/admin/mobile-banners/upload", formData);
+  },
 };
 

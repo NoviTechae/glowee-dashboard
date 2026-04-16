@@ -1,8 +1,8 @@
-// app/admin/bookings/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, API_BASE } from "@/lib/api";
+import { getToken } from "@/lib/auth";
 import Link from "next/link";
 
 type Booking = {
@@ -14,10 +14,10 @@ type Booking = {
   salon_name: string;
   branch_id?: string;
   branch_name?: string;
-  scheduled_at: string; // ✅ Your actual column
-  mode: "in_salon" | "home"; // ✅ Your actual column
+  scheduled_at: string;
+  mode: "in_salon" | "home";
   status: "pending" | "confirmed" | "completed" | "cancelled" | "no_show";
-  total_aed: number; // ✅ Your actual column
+  total_aed: number;
   subtotal_aed?: number;
   fees_aed?: number;
   customer_note?: string;
@@ -40,7 +40,6 @@ export default function AdminBookingsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -51,14 +50,12 @@ export default function AdminBookingsPage() {
       setLoading(true);
       setError(null);
 
-      // Build query params
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.append("status", statusFilter);
-      if (searchTerm) params.append("search", searchTerm);
+      if (searchTerm.trim()) params.append("search", searchTerm.trim());
       if (dateFilter) params.append("date", dateFilter);
       if (modeFilter !== "all") params.append("mode", modeFilter);
 
-      // Load bookings and stats
       const [bookingsData, statsData] = await Promise.all([
         api.get(`/dashboard/admin/bookings?${params.toString()}`),
         api.get("/dashboard/admin/bookings/stats"),
@@ -91,11 +88,10 @@ export default function AdminBookingsPage() {
   async function handleCancelBooking(booking: Booking) {
     const confirmed = confirm(
       `⚠️ Cancel Booking?\n\n` +
-      `Customer: ${booking.user_name || "Unknown"}\n` +
-      `Salon: ${booking.salon_name}\n` +
-      `Date: ${new Date(booking.scheduled_at).toLocaleString()}\n\n` +
-      `This action will notify the customer and salon.\n\n` +
-      `Continue?`
+        `Customer: ${booking.user_name || "Unknown"}\n` +
+        `Salon: ${booking.salon_name}\n` +
+        `Date: ${new Date(booking.scheduled_at).toLocaleString()}\n\n` +
+        `Continue?`
     );
 
     if (!confirmed) return;
@@ -105,95 +101,116 @@ export default function AdminBookingsPage() {
         reason: "Cancelled by admin",
       });
 
-      alert(`✅ Booking cancelled successfully`);
+      alert("✅ Booking cancelled successfully");
       await load();
     } catch (e: any) {
       alert(`❌ Failed to cancel: ${e?.message}`);
     }
   }
 
-  // Filter bookings by search term
-  const filteredBookings = bookings.filter((b) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      b.id.toLowerCase().includes(term) ||
-      b.user_name?.toLowerCase().includes(term) ||
-      b.salon_name.toLowerCase().includes(term)
-    );
-  });
+  async function exportCsv() {
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (searchTerm.trim()) params.append("search", searchTerm.trim());
+      if (dateFilter) params.append("date", dateFilter);
+      if (modeFilter !== "all") params.append("mode", modeFilter);
+
+      const token = getToken();
+
+      const res = await fetch(
+        `${API_BASE}/dashboard/admin/bookings/export?${params.toString()}`,
+        {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to export CSV");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bookings-export.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e?.message || "Export failed");
+    }
+  }
+
+  function clearFilters() {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setModeFilter("all");
+    setDateFilter("");
+    setTimeout(() => load(), 0);
+  }
 
   return (
     <div className="p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Bookings Management</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Monitor and manage all platform bookings
-          </p>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Bookings Management</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Monitor and manage all platform bookings
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={exportCsv}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              Export CSV
+            </button>
+
+            <button
+              onClick={load}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
-        {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
-            <div className="bg-white border rounded-xl p-4 shadow-sm">
-              <div className="text-xs text-gray-600">Total</div>
-              <div className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</div>
-            </div>
-
-            <div className="bg-white border rounded-xl p-4 shadow-sm">
-              <div className="text-xs text-gray-600">Today</div>
-              <div className="text-2xl font-bold text-blue-600 mt-1">{stats.today}</div>
-            </div>
-
-            <div className="bg-white border rounded-xl p-4 shadow-sm">
-              <div className="text-xs text-gray-600">This Month</div>
-              <div className="text-2xl font-bold text-purple-600 mt-1">{stats.thisMonth}</div>
-            </div>
-
-            <div className="bg-white border rounded-xl p-4 shadow-sm">
-              <div className="text-xs text-gray-600">Pending</div>
-              <div className="text-2xl font-bold text-yellow-600 mt-1">{stats.pending}</div>
-            </div>
-
-            <div className="bg-white border rounded-xl p-4 shadow-sm">
-              <div className="text-xs text-gray-600">Confirmed</div>
-              <div className="text-2xl font-bold text-blue-600 mt-1">{stats.confirmed}</div>
-            </div>
-
-            <div className="bg-white border rounded-xl p-4 shadow-sm">
-              <div className="text-xs text-gray-600">Completed</div>
-              <div className="text-2xl font-bold text-emerald-600 mt-1">{stats.completed}</div>
-            </div>
-
-            <div className="bg-white border rounded-xl p-4 shadow-sm">
-              <div className="text-xs text-gray-600">Cancelled</div>
-              <div className="text-2xl font-bold text-red-600 mt-1">{stats.cancelled}</div>
-            </div>
+          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
+            <StatCard title="Total" value={stats.total} color="text-gray-900" />
+            <StatCard title="Today" value={stats.today} color="text-blue-600" />
+            <StatCard title="This Month" value={stats.thisMonth} color="text-purple-600" />
+            <StatCard title="Pending" value={stats.pending} color="text-yellow-600" />
+            <StatCard title="Confirmed" value={stats.confirmed} color="text-blue-600" />
+            <StatCard title="Completed" value={stats.completed} color="text-emerald-600" />
+            <StatCard title="Cancelled" value={stats.cancelled} color="text-red-600" />
           </div>
         )}
 
-        {/* Filters */}
-        <div className="bg-white border rounded-xl p-4 shadow-sm mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {/* Search */}
+        <div className="mb-6 rounded-xl border bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Search</label>
               <input
                 type="text"
-                placeholder="Customer, salon..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+                placeholder="Customer, salon, booking ID..."
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
 
-            {/* Status Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Status</label>
               <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -206,11 +223,10 @@ export default function AdminBookingsPage() {
               </select>
             </div>
 
-            {/* Mode Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Mode</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Mode</label>
               <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
                 value={modeFilter}
                 onChange={(e) => setModeFilter(e.target.value)}
               >
@@ -220,35 +236,33 @@ export default function AdminBookingsPage() {
               </select>
             </div>
 
-            {/* Date Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Date</label>
               <input
                 type="date"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
               />
             </div>
 
-            {/* Clear Filters */}
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
               <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setStatusFilter("all");
-                  setModeFilter("all");
-                  setDateFilter("");
-                }}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                onClick={load}
+                className="w-full rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700"
               >
-                Clear Filters
+                Search
+              </button>
+              <button
+                onClick={clearFilters}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Clear
               </button>
             </div>
           </div>
         </div>
 
-        {/* Error State */}
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
             <p className="text-sm text-red-700">
@@ -257,43 +271,38 @@ export default function AdminBookingsPage() {
           </div>
         )}
 
-        {/* Loading State */}
-        {loading && (
+        {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto"></div>
+              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-pink-500" />
               <p className="mt-4 text-gray-600">Loading bookings...</p>
             </div>
           </div>
-        )}
-
-        {/* Bookings Table */}
-        {!loading && (
-          <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
+        ) : (
+          <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="border-b bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">ID</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">Customer</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">Salon</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                      Scheduled At
-                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Scheduled At</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">Mode</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">Total</th>
                     <th className="px-4 py-3 text-right font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-gray-100">
-                  {filteredBookings.map((booking) => (
-                    <tr key={booking.id} className="hover:bg-gray-50 transition">
+                  {bookings.map((booking) => (
+                    <tr key={booking.id} className="transition hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="font-mono text-xs font-semibold text-pink-600">
                           #{booking.id.slice(0, 8)}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5">
+                        <div className="mt-0.5 text-xs text-gray-500">
                           {new Date(booking.created_at).toLocaleDateString()}
                         </div>
                       </td>
@@ -303,7 +312,7 @@ export default function AdminBookingsPage() {
                           {booking.user_name || `User #${booking.user_id}`}
                         </div>
                         {booking.user_phone && (
-                          <div className="text-xs text-gray-500">📱 {booking.user_phone}</div>
+                          <div className="text-xs text-gray-500">{booking.user_phone}</div>
                         )}
                       </td>
 
@@ -315,7 +324,7 @@ export default function AdminBookingsPage() {
                           {booking.salon_name}
                         </Link>
                         {booking.branch_name && (
-                          <div className="text-xs text-gray-500">📍 {booking.branch_name}</div>
+                          <div className="text-xs text-gray-500">{booking.branch_name}</div>
                         )}
                       </td>
 
@@ -324,7 +333,7 @@ export default function AdminBookingsPage() {
                           {new Date(booking.scheduled_at).toLocaleDateString()}
                         </div>
                         <div className="text-xs text-gray-500">
-                          🕐 {new Date(booking.scheduled_at).toLocaleTimeString()}
+                          {new Date(booking.scheduled_at).toLocaleTimeString()}
                         </div>
                       </td>
 
@@ -340,7 +349,7 @@ export default function AdminBookingsPage() {
                         <div className="font-semibold text-gray-900">
                           AED {Number(booking.total_aed || 0).toFixed(2)}
                         </div>
-                        {booking.subtotal_aed && (
+                        {booking.subtotal_aed != null && (
                           <div className="text-xs text-gray-500">
                             Subtotal: AED {Number(booking.subtotal_aed || 0).toFixed(2)}
                           </div>
@@ -369,13 +378,12 @@ export default function AdminBookingsPage() {
                     </tr>
                   ))}
 
-                  {/* Empty State */}
-                  {filteredBookings.length === 0 && (
+                  {bookings.length === 0 && (
                     <tr>
                       <td className="px-4 py-12 text-center" colSpan={8}>
                         <div className="flex flex-col items-center">
                           <svg
-                            className="w-12 h-12 text-gray-400 mb-3"
+                            className="mb-3 h-12 w-12 text-gray-400"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -388,10 +396,8 @@ export default function AdminBookingsPage() {
                             />
                           </svg>
                           <p className="text-sm font-medium text-gray-500">No bookings found</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {searchTerm || statusFilter !== "all"
-                              ? "Try adjusting your filters"
-                              : "Bookings will appear here once customers start booking"}
+                          <p className="mt-1 text-xs text-gray-400">
+                            Try adjusting your filters or wait for new bookings.
                           </p>
                         </div>
                       </td>
@@ -401,11 +407,9 @@ export default function AdminBookingsPage() {
               </table>
             </div>
 
-            {/* Results Count */}
-            {filteredBookings.length > 0 && (
-              <div className="px-4 py-3 border-t bg-gray-50 text-sm text-gray-600">
-                Showing {filteredBookings.length} booking{filteredBookings.length !== 1 ? "s" : ""}
-                {(searchTerm || statusFilter !== "all") && ` (filtered)`}
+            {bookings.length > 0 && (
+              <div className="border-t bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                Showing {bookings.length} booking{bookings.length !== 1 ? "s" : ""}
               </div>
             )}
           </div>
@@ -415,7 +419,23 @@ export default function AdminBookingsPage() {
   );
 }
 
-// Mode Badge Component
+function StatCard({
+  title,
+  value,
+  color,
+}: {
+  title: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div className="rounded-xl border bg-white p-4 shadow-sm">
+      <div className="text-xs text-gray-600">{title}</div>
+      <div className={`mt-1 text-2xl font-bold ${color}`}>{value}</div>
+    </div>
+  );
+}
+
 function ModeBadge({ mode }: { mode: "in_salon" | "home" }) {
   const variants = {
     in_salon: {
@@ -439,7 +459,6 @@ function ModeBadge({ mode }: { mode: "in_salon" | "home" }) {
   );
 }
 
-// Status Badge Component
 function StatusBadge({ status }: { status: Booking["status"] }) {
   const variants = {
     pending: {

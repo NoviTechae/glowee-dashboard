@@ -1,4 +1,3 @@
-// app/admin/users/page.tsx  — FIXED VERSION
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,33 +10,108 @@ import { userApi } from "@/lib/api";
 import { User } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { API_BASE } from "@/lib/api";
+import { getToken } from "@/lib/auth";
+
+type UserStats = {
+  total_users: number;
+  active_users: number;
+  blocked_users: number;
+  new_this_month: number;
+};
 
 export default function UsersPage() {
   const router = useRouter();
+
   const [users, setUsers] = useState<User[]>([]);
+  const [stats, setStats] = useState<UserStats | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const [sort, setSort] = useState("created_desc");
 
-const loadUsers = async () => {
-  try {
-    const res = await userApi.getAll();
-    setUsers(Array.isArray(res.data) ? res.data : []);
-  } catch (error: any) {
-    toast.error(error.message || "Failed to load users");
-    setUsers([]);
-  } finally {
-    setLoading(false);
+  useEffect(() => {
+    loadAll();
+  }, [status, sort]);
+
+  async function loadAll() {
+    try {
+      setLoading(true);
+
+      const [usersRes, statsRes] = await Promise.all([
+        userApi.getAll({
+          search,
+          status,
+          sort,
+        }),
+        userApi.getStats(),
+      ]);
+
+      setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
+      setStats(statsRes || null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to load users");
+      setUsers([]);
+      setStats({
+        total_users: 0,
+        active_users: 0,
+        blocked_users: 0,
+        new_this_month: 0,
+      });
+    } finally {
+      setLoading(false);
+    }
+
   }
-};
+
+      async function exportCsv() {
+  try {
+    const params = new URLSearchParams();
+
+    if (search.trim()) params.set("search", search.trim());
+    if (status !== "all") params.set("status", status);
+    if (sort) params.set("sort", sort);
+
+    const token = getToken();
+
+    const res = await fetch(
+      `${API_BASE}/dashboard/admin/users/export?${params.toString()}`,
+      {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to export CSV");
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "users-export.csv";
+    a.click();
+
+    window.URL.revokeObjectURL(url);
+
+    toast.success("CSV exported successfully");
+  } catch (error: any) {
+    toast.error(error.message || "Export failed");
+  }
+}
   const handleToggleBlock = async (user: User) => {
     const action = user.is_blocked ? "unblock" : "block";
+
     if (!confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
 
     setTogglingId(user.id);
+
     try {
       await userApi.toggleBlock(user.id);
 
@@ -55,15 +129,121 @@ const loadUsers = async () => {
     }
   };
 
+  function clearFilters() {
+    setSearch("");
+    setStatus("all");
+    setSort("created_desc");
+    setTimeout(() => loadAll(), 0);
+  }
+
   if (loading) return <Loading size="lg" />;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-        <p className="text-gray-600">Manage all registered users</p>
+      {/* Header */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Users</h1>
+          <p className="text-gray-600">Manage all registered users</p>
+        </div>
+
+<div className="flex gap-2">
+  <Button variant="secondary" onClick={exportCsv}>
+    Export CSV
+  </Button>
+
+  <Button variant="secondary" onClick={loadAll}>
+    Refresh
+  </Button>
+</div>
       </div>
 
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard title="Total Users" value={stats.total_users} />
+          <StatCard
+            title="Active Users"
+            value={stats.active_users}
+            color="text-emerald-600"
+          />
+          <StatCard
+            title="Blocked Users"
+            value={stats.blocked_users}
+            color="text-red-600"
+          />
+          <StatCard
+            title="New This Month"
+            value={stats.new_this_month}
+            color="text-blue-600"
+          />
+        </div>
+      )}
+
+      {/* Filters */}
+      <Card>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Search */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Search
+            </label>
+            <input
+              type="text"
+              placeholder="Name, phone, email..."
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Status
+            </label>
+            <select
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="all">All Users</option>
+              <option value="active">Active</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          </div>
+
+          {/* Sort */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Sort By
+            </label>
+            <select
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+            >
+              <option value="created_desc">Newest First</option>
+              <option value="created_asc">Oldest First</option>
+              <option value="name_asc">Name A-Z</option>
+              <option value="bookings_desc">Most Bookings</option>
+              <option value="spent_desc">Highest Spent</option>
+            </select>
+          </div>
+
+          {/* Buttons */}
+          <div className="flex items-end gap-2">
+            <Button className="w-full" onClick={loadAll}>
+              Search
+            </Button>
+            <Button variant="secondary" className="w-full" onClick={clearFilters}>
+              Clear
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Table */}
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -78,59 +258,27 @@ const loadUsers = async () => {
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
+
             <tbody>
               {users.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-gray-500">
-                    <div className="flex flex-col items-center">
-                      <svg
-                        className="w-12 h-12 text-gray-400 mb-3"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                        />
-                      </svg>
-                      <p className="text-sm font-medium">No users found</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Users will appear here once they register
-                      </p>
-                    </div>
+                    No users found
                   </td>
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        {/* FIX: removed user.photo — not returned by backend */}
-                        <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-semibold">
-                          {user.name
-                            ?.split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .slice(0, 2)
-                            .toUpperCase() || "?"}                        </div>
-                        <span className="font-medium">{user.name}</span>
-                      </div>
-                    </td>
+                  <tr
+                    key={user.id}
+                    className="border-b border-gray-100 hover:bg-gray-50"
+                  >
+                    <td className="py-3 px-4 font-medium">{user.name}</td>
                     <td className="py-3 px-4 text-gray-600">{user.phone}</td>
                     <td className="py-3 px-4 text-gray-600">
-                      {user.email || <span className="text-gray-400 text-sm">No email</span>}
+                      {user.email || "-"}
                     </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {user.wallet_balance_aed !== undefined ? (
-                        <span className="font-semibold text-green-600">
-                          AED {Number(user.wallet_balance_aed).toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-sm">-</span>
-                      )}
+                    <td className="py-3 px-4 text-green-600 font-semibold">
+                      AED {Number(user.wallet_balance_aed || 0).toFixed(2)}
                     </td>
                     <td className="py-3 px-4">
                       {user.is_blocked ? (
@@ -141,32 +289,30 @@ const loadUsers = async () => {
                         <Badge variant="gray">Inactive</Badge>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-gray-600 text-sm">
-                      {user.created_at ? formatDate(user.created_at) : "-"}                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex gap-2">
-                        {/* FIX: View button now navigates to user detail page */}
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => router.push(`/admin/users/${user.id}`)}
-                        >
-                          View
-                        </Button>
-                        {/* FIX: added Block/Unblock action */}
-                        <Button
-                          variant={user.is_blocked ? "primary" : "danger"}
-                          size="sm"
-                          onClick={() => handleToggleBlock(user)}
-                          disabled={togglingId === user.id}
-                        >
-                          {togglingId === user.id
-                            ? "..."
-                            : user.is_blocked
-                              ? "Unblock"
-                              : "Block"}
-                        </Button>
-                      </div>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {user.created_at ? formatDate(user.created_at) : "-"}
+                    </td>
+                    <td className="py-3 px-4 flex gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => router.push(`/admin/users/${user.id}`)}
+                      >
+                        View
+                      </Button>
+
+                      <Button
+                        variant={user.is_blocked ? "primary" : "danger"}
+                        size="sm"
+                        onClick={() => handleToggleBlock(user)}
+                        disabled={togglingId === user.id}
+                      >
+                        {togglingId === user.id
+                          ? "..."
+                          : user.is_blocked
+                          ? "Unblock"
+                          : "Block"}
+                      </Button>
                     </td>
                   </tr>
                 ))
@@ -174,13 +320,24 @@ const loadUsers = async () => {
             </tbody>
           </table>
         </div>
-
-        {users.length > 0 && (
-          <div className="px-4 py-3 border-t bg-gray-50 text-sm text-gray-600">
-            Showing {users.length} user{users.length !== 1 ? "s" : ""}
-          </div>
-        )}
       </Card>
+    </div>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  color = "text-gray-900",
+}: {
+  title: string;
+  value: number;
+  color?: string;
+}) {
+  return (
+    <div className="rounded-xl border bg-white p-4 shadow-sm">
+      <div className="text-xs text-gray-600">{title}</div>
+      <div className={`mt-1 text-2xl font-bold ${color}`}>{value}</div>
     </div>
   );
 }

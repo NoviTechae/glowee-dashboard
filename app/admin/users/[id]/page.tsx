@@ -127,8 +127,14 @@ setUser((prev) =>
       <div className="bg-white border rounded-2xl p-6 shadow-sm">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-2xl font-bold">
-<h1 className="text-2xl font-bold text-gray-900">{user.name || "Unnamed User"}</h1>            </div>
+       <div className="w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-2xl font-bold">
+  {(user.name || "U")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()}
+</div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
               <p className="text-gray-500">{user.phone}</p>

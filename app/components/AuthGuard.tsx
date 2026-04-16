@@ -14,45 +14,44 @@ export function AuthGuard({ children, requireRole }: AuthGuardProps) {
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+useEffect(() => {
+  const checkAuth = () => {
+    const justLoggedOut = sessionStorage.getItem("justLoggedOut");
 
-  useEffect(() => {
-    // ✅ Check auth only once on mount
-    const checkAuth = () => {
-      // Check if logged out flag exists
-      const justLoggedOut = sessionStorage.getItem('justLoggedOut');
-      if (justLoggedOut) {
-        router.replace("/login");
-        return;
-      }
+    if (justLoggedOut) {
+      setIsLoading(false); // ✅ مهم
+      router.replace("/login");
+      return;
+    }
 
-      // Check authentication
-      if (!isAuthenticated()) {
-        router.replace("/login");
-        return;
-      }
+    if (!isAuthenticated()) {
+      setIsLoading(false); // ✅ مهم
+      router.replace("/login");
+      return;
+    }
 
-      // Check role if required
-      if (requireRole) {
-        const userRole = getRole();
-        if (userRole !== requireRole) {
-          // Redirect to appropriate dashboard
-          if (userRole === "admin") {
-            router.replace("/admin");
-          } else {
-            router.replace("/salon");
-          }
-          return;
+    if (requireRole) {
+      const userRole = getRole();
+
+      if (userRole !== requireRole) {
+        setIsLoading(false); // ✅ مهم
+
+        if (userRole === "admin") {
+          router.replace("/admin");
+        } else {
+          router.replace("/salon");
         }
+        return;
       }
+    }
 
-      // All checks passed
-      setIsAuthorized(true);
-      setIsLoading(false);
-    };
+    setIsAuthorized(true);
+    setIsLoading(false);
+  };
 
-    checkAuth();
-  }, []); // ✅ Empty array - run once only
-
+  checkAuth();
+}, []);
   // Show loading state
   if (isLoading) {
     return (

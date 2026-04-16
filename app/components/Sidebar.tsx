@@ -12,13 +12,16 @@ interface SidebarProps {
 const menuItems = {
   admin: [
     { label: "Dashboard", href: "/admin" },
+    { label: "Banners", href: "/admin/mobile-banners" },
     { label: "Salons", href: "/admin/salons" },
+    { label: "Home Services", href: "/admin/home-services" },
     { label: "Users", href: "/admin/users" },
     { label: "Bookings", href: "/admin/bookings" },
-    { label: "Home Services", href: "/admin/home-services" },
     { label: "Feedback", href: "/admin/feedback" },
     { label: "Gift Themes", href: "/admin/gifts/themes" },
-    { label: "Notifications", href: "/admin/notifications"},
+    { label: "Notifications", href: "/admin/notifications" },
+    { label: "Payments", href: "/admin/payments" },
+    { label: "Wallet", href: "/admin/wallet" },
     { label: "Profile", href: "/admin/profile" },
   ],
   salon: [
@@ -30,7 +33,7 @@ const menuItems = {
     { label: "Services", href: "/salon/services" },
     { label: "Bookings", href: "/salon/bookings" },
     { label: "Reviews", href: "/salon/reviews" },
-    { label: "Analytics", href: "/salon/analytics" },
+    //{ label: "Analytics", href: "/salon/analytics" },
   ],
 };
 

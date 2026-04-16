@@ -47,8 +47,11 @@ export default function SalonDashboard() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
             Dashboard
           </h1>
-          <p className="text-gray-500 mt-1">Welcome back! Here's your salon overview</p>
-        </div>
+<p className="text-gray-500 mt-1">
+  {(stats?.today_bookings || 0) === 0
+    ? "You're all set. Waiting for your first booking ✨"
+    : `You have ${stats?.today_bookings} booking${(stats?.today_bookings || 0) > 1 ? "s" : ""} today`}
+</p>        </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-sm text-gray-500">Today</p>
@@ -78,9 +81,13 @@ export default function SalonDashboard() {
             </span>
           </div>
           <p className="text-sm font-medium text-blue-900 mb-1">Total Bookings</p>
-          <p className="text-3xl font-bold text-blue-600">
-            {stats?.total_bookings || 0}
-          </p>
+{(stats?.total_bookings || 0) === 0 ? (
+  <p className="text-sm text-gray-500 mt-2">No bookings yet</p>
+) : (
+  <p className="text-3xl font-bold text-blue-600">
+    {stats?.total_bookings}
+  </p>
+)}
         </div>
 
         {/* Active Bookings */}
@@ -132,9 +139,15 @@ export default function SalonDashboard() {
             </span>
           </div>
           <p className="text-sm font-medium text-pink-900 mb-1">Total Revenue</p>
-          <p className="text-3xl font-bold text-pink-600">
-            {formatCurrency(stats?.total_revenue || 0)}
-          </p>
+{(stats?.total_revenue || 0) === 0 ? (
+  <p className="text-sm text-gray-500 mt-2">
+    No revenue yet
+  </p>
+) : (
+  <p className="text-3xl font-bold text-pink-600">
+    {formatCurrency(stats?.total_revenue || 0)}
+  </p>
+)}
         </div>
       </div>
 
@@ -250,19 +263,26 @@ export default function SalonDashboard() {
           <div className="space-y-6">
             <div>
               <p className="text-white/80 text-sm mb-2">Revenue This Month</p>
-              <p className="text-5xl font-bold">
-                {formatCurrency(stats?.this_month_revenue || 0)}
-              </p>
+{(stats?.this_month_revenue || 0) === 0 ? (
+  <p className="text-white/80 text-sm">
+    No bookings yet this month
+  </p>
+) : (
+  <p className="text-5xl font-bold">
+    {formatCurrency(stats?.this_month_revenue || 0)}
+  </p>
+)}
             </div>
             
             <div className="pt-4 border-t border-white/20">
               <div className="flex items-center justify-between">
                 <span className="text-white/80 text-sm">Average per booking</span>
                 <span className="font-semibold">
-                  {stats?.completed_bookings ? 
-                    formatCurrency((stats.total_revenue || 0) / stats.completed_bookings) : 
-                    formatCurrency(0)
-                  }
+{stats?.completed_bookings ? (
+  formatCurrency((stats.total_revenue || 0) / stats.completed_bookings)
+) : (
+  <span className="text-white/60">—</span>
+)}
                 </span>
               </div>
             </div>

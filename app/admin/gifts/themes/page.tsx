@@ -27,16 +27,13 @@ interface GiftTheme {
 const CATEGORIES = [
   "Welcome Back",
   "Birthday",
-  "Anniversary",
+  "Love",
   "Wedding",
-  "Valentine's Day",
-  "Mother's Day",
-  "Father's Day",
-  "Graduation",
   "Thank You",
   "Congratulations",
   "Get Well",
-  "Holiday",
+  "Baby",
+  "Eid",
   "Flowers",
   "Other"
 ];
@@ -60,6 +57,9 @@ export default function GiftThemesPage() {
   });
 
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+
+  const [search, setSearch] = useState("");
+const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
   useEffect(() => {
     loadThemes();
@@ -196,10 +196,29 @@ export default function GiftThemesPage() {
     setIsModalOpen(true);
   };
 
-  const filteredThemes =
-    selectedCategory === "All"
-      ? themes
-      : themes.filter((t) => t.category === selectedCategory);
+const filteredThemes = themes.filter((t) => {
+  const matchesCategory =
+    selectedCategory === "All" ||
+    (t.category || "").trim().toLowerCase() === selectedCategory.trim().toLowerCase();
+
+  const searchValue = search.trim().toLowerCase();
+
+  const matchesSearch =
+    !searchValue ||
+    (t.title || "").toLowerCase().includes(searchValue) ||
+    (t.category || "").toLowerCase().includes(searchValue);
+
+  const matchesStatus =
+    statusFilter === "all" ||
+    (statusFilter === "active" && t.is_active) ||
+    (statusFilter === "inactive" && !t.is_active);
+
+  return matchesCategory && matchesSearch && matchesStatus;
+});
+
+<p className="text-sm text-gray-500">
+  Showing {filteredThemes.length} theme{filteredThemes.length !== 1 ? "s" : ""}
+</p>
 
   const themesByCategory = themes.reduce((acc, theme) => {
     acc[theme.category] = (acc[theme.category] || 0) + 1;
@@ -289,6 +308,26 @@ export default function GiftThemesPage() {
           })}
         </div>
       </Card>
+
+<Card>
+  <div className="flex flex-col gap-3 md:flex-row">
+    <Input
+      placeholder="Search themes..."
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+    />
+
+    <select
+      value={statusFilter}
+      onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
+      className="rounded-lg border border-gray-300 px-3 py-2"
+    >
+      <option value="all">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+    </select>
+  </div>
+</Card>
 
       {filteredThemes.length === 0 ? (
         <Card>
