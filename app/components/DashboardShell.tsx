@@ -21,7 +21,7 @@ export default function DashboardShell({
   title: string;
   nav: NavItem[];
   children: React.ReactNode;
-  roleGuard: "admin" | "salon_owner";
+  roleGuard: "admin" | "salon";
 }) {
   const pathname = usePathname();
   const router = useRouter();

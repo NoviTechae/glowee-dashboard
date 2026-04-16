@@ -18,7 +18,7 @@ export default function SalonLayout({
   }, []);
 
   return (
-<AuthGuard requireRole="salon_owner">
+<AuthGuard requireRole="salon">
         <div className="min-h-screen bg-gray-50">
         <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-10">
           <div className="h-full px-6 flex items-center justify-between">

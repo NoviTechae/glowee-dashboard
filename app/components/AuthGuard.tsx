@@ -7,7 +7,7 @@ import { isAuthenticated, getRole } from "@/lib/auth";
 
 interface AuthGuardProps {
   children: React.ReactNode;
-  requireRole?: "admin" | "salon_owner";
+  requireRole?: "admin" | "salon";
 }
 
 export function AuthGuard({ children, requireRole }: AuthGuardProps) {
