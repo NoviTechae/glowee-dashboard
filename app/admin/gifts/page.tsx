@@ -12,7 +12,6 @@ import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
-const router = useRouter();
 
 type Gift = {
     id: string;
@@ -49,6 +48,7 @@ const STATUS_VARIANT: Record<string, "success" | "danger" | "gray" | "warning"> 
 };
 
 export default function GiftsPage() {
+    const router = useRouter();
     const [gifts, setGifts] = useState<Gift[]>([]);
     const [stats, setStats] = useState<GiftStats | null>(null);
     const [loading, setLoading] = useState(true);
