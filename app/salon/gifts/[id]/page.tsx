@@ -1,4 +1,4 @@
-// app/admin/gifts/[id]/page.tsx
+// app/salon/gifts/[id]/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -34,6 +34,17 @@ type GiftDetail = {
   created_at: string;
 };
 
+type UsageBooking = {
+  id: string;
+  status: string;
+  mode: string;
+  scheduled_at: string;
+  total_aed: number;
+  created_at: string;
+  salon_name?: string | null;
+  branch_name?: string | null;
+};
+
 const STATUS_VARIANT: Record<string, "success" | "danger" | "gray" | "warning"> = {
   active: "success",
   redeemed: "gray",
@@ -46,6 +57,7 @@ export default function GiftDetailPage() {
   const giftId = Array.isArray(params.id) ? params.id[0] : (params.id as string);
 
   const [gift, setGift] = useState<GiftDetail | null>(null);
+  const [usageBooking, setUsageBooking] = useState<UsageBooking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +81,7 @@ export default function GiftDetailPage() {
       }
 
       setGift(data.gift);
+      setUsageBooking(data.usage_booking || null);
     } catch (e: any) {
       setError(e.message || "Failed to load gift");
     } finally {
@@ -100,7 +113,7 @@ export default function GiftDetailPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <Link
-        href="/admin/gifts"
+        href="/salon/gifts"
         className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1"
       >
         ← Back to gifts
@@ -177,6 +190,54 @@ export default function GiftDetailPage() {
           <p className="text-gray-400">No message</p>
         )}
       </InfoCard>
+
+      <InfoCard title="Usage Tracking">
+  {usageBooking ? (
+    <>
+      <InfoRow label="Booking ID" value={usageBooking.id} />
+
+      <InfoRow
+        label="Booking Status"
+        value={usageBooking.status}
+      />
+
+      <InfoRow
+        label="Mode"
+        value={usageBooking.mode}
+      />
+
+      <InfoRow
+        label="Salon"
+        value={usageBooking.salon_name || "-"}
+      />
+
+      <InfoRow
+        label="Branch"
+        value={usageBooking.branch_name || "-"}
+      />
+
+      <InfoRow
+        label="Scheduled At"
+        value={
+          usageBooking.scheduled_at
+            ? formatDate(usageBooking.scheduled_at)
+            : "-"
+        }
+      />
+
+      <InfoRow
+        label="Booking Total"
+        value={`AED ${Number(
+          usageBooking.total_aed || 0
+        ).toFixed(2)}`}
+      />
+    </>
+  ) : (
+    <p className="text-sm text-gray-400">
+      Gift has not been used in a booking yet.
+    </p>
+  )}
+</InfoCard>
     </div>
   );
 }
