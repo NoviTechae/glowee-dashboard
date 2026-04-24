@@ -33,6 +33,7 @@ const menuItems = {
     { label: "Categories", href: "/salon/categories" },
     { label: "Services", href: "/salon/services" },
     { label: "Bookings", href: "/salon/bookings" },
+    { label: "Gifts", href: "/salon/gifts" },
     { label: "Reviews", href: "/salon/reviews" },
     { label: "Subscription", href: "/salon/subscription" },
   ],
