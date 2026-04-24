@@ -17,7 +17,7 @@ const menuItems = {
     { label: "Home Services", href: "/admin/home-services" },
     { label: "Users", href: "/admin/users" },
     { label: "Bookings", href: "/admin/bookings" },
-    { label: "Gift Themes", href: "/admin/gifts" },
+    { label: "Gifts", href: "/admin/gifts" },
     { label: "Feedback", href: "/admin/feedback" },
     { label: "Gift Themes", href: "/admin/gifts/themes" },
     { label: "Notifications", href: "/admin/notifications" },
