@@ -23,7 +23,7 @@ const menuItems = {
     { label: "Notifications", href: "/admin/notifications" },
     { label: "Payments", href: "/admin/payments" },
     { label: "Wallet", href: "/admin/wallet" },
-    { label: "Subscription", href: "/admin/subscription" },
+    { label: "Subscription", href: "/admin/subscriptions" },
     { label: "Profile", href: "/admin/profile" },
   ],
   salon: [
