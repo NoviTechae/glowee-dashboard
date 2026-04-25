@@ -137,10 +137,33 @@ export default function SubscriptionPage() {
         "POST"
       );
 
-      toast.success("Subscription cancelled");
-      loadSubscription();
+      toast.success("Subscription will cancel at the end of the current period"); loadSubscription();
     } catch (error: any) {
       toast.error(error.message || "Cancel failed");
+    }
+  }
+
+  async function changePlan(planCode: string) {
+    try {
+      await request("/dashboard/salon/subscription/change-plan", "POST", {
+        plan_code: planCode,
+      });
+
+      toast.success("Plan updated successfully");
+      loadSubscription();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to change plan");
+    }
+  }
+
+  async function reactivateSubscription() {
+    try {
+      await request("/dashboard/salon/subscription/reactivate", "POST");
+
+      toast.success("Subscription reactivated");
+      loadSubscription();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to reactivate");
     }
   }
 
@@ -161,69 +184,25 @@ export default function SubscriptionPage() {
         </p>
       </div>
 
-      {!subscription ? (
-        <Card>
-          <div className="space-y-6">
-            <h2 className="text-lg font-semibold">
-              Choose Your Plan
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {plans.map((plan) => (
-                <div
-                  key={plan.id}
-                  className="rounded-xl border p-5 bg-white"
-                >
-                  <h3 className="text-lg font-bold">
-                    {plan.name}
-                  </h3>
-
-                  <p className="text-2xl font-bold text-pink-600 mt-2">
-                    AED {Number(plan.price_aed).toFixed(2)}
-                  </p>
-
-                  <p className="text-sm text-gray-500">
-                    per {plan.interval_type}
-                  </p>
-
-                  {plan.description && (
-                    <p className="mt-3 text-sm text-gray-600">
-                      {plan.description}
-                    </p>
-                  )}
-
-                  <Button
-                    className="mt-5 w-full"
-                    onClick={() => startTrial(plan.code)}
-                  >
-                    Start Free Trial
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      ) : (
+      {subscription && (
         <>
           <Card>
+            {subscription.cancel_at_period_end && (
+              <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+                Your subscription is scheduled to end on{" "}
+                {subscription.current_period_end
+                  ? formatDate(subscription.current_period_end)
+                  : "the end of the current period"}.
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <InfoCard
-                title="Current Plan"
-                value={subscription.plan_name}
-              />
-
-              <InfoCard
-                title="Status"
-                value={subscription.status}
-              />
-
+              <InfoCard title="Current Plan" value={subscription.plan_name} />
+              <InfoCard title="Status" value={subscription.status} />
               <InfoCard
                 title="Price"
-                value={`AED ${Number(
-                  subscription.amount_aed || 0
-                ).toFixed(2)}`}
+                value={`AED ${Number(subscription.amount_aed || 0).toFixed(2)}`}
               />
-
               <InfoCard
                 title="Renewal Date"
                 value={
@@ -232,14 +211,10 @@ export default function SubscriptionPage() {
                     : "-"
                 }
               />
-
               <InfoCard
                 title="Auto Renew"
-                value={
-                  subscription.auto_renew ? "Enabled" : "Disabled"
-                }
+                value={subscription.auto_renew ? "Enabled" : "Disabled"}
               />
-
               <InfoCard
                 title="Trial Ends"
                 value={
@@ -253,14 +228,10 @@ export default function SubscriptionPage() {
 
           <Card>
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">
-                Recent Payments
-              </h2>
+              <h2 className="text-lg font-semibold">Recent Payments</h2>
 
               {payments.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No payments yet
-                </p>
+                <p className="text-sm text-gray-500">No payments yet</p>
               ) : (
                 <div className="space-y-3">
                   {payments.map((payment) => (
@@ -272,10 +243,7 @@ export default function SubscriptionPage() {
                         <p className="font-medium">
                           AED {Number(payment.amount_aed).toFixed(2)}
                         </p>
-
-                        <p className="text-sm text-gray-500">
-                          {payment.status}
-                        </p>
+                        <p className="text-sm text-gray-500">{payment.status}</p>
                       </div>
 
                       <div className="text-sm text-gray-500">
@@ -289,30 +257,93 @@ export default function SubscriptionPage() {
               )}
             </div>
           </Card>
+        </>
+      )}
 
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              onClick={markPaid}
-            >
-              Mark Paid
+      <Card>
+        <div className="space-y-6">
+          <h2 className="text-lg font-semibold">Available Plans</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {plans.map((plan) => {
+              const isCurrent = subscription?.plan_code === plan.code;
+
+              return (
+                <div
+                  key={plan.id}
+                  className={`rounded-xl border p-5 bg-white ${isCurrent ? "border-pink-300 bg-pink-50" : ""
+                    }`}
+                >
+                  <h3 className="text-lg font-bold">{plan.name}</h3>
+
+                  <p className="text-2xl font-bold text-pink-600 mt-2">
+                    AED {Number(plan.price_aed).toFixed(2)}
+                  </p>
+
+                  <p className="text-sm text-gray-500">per {plan.interval_type}</p>
+
+                  {plan.description && (
+                    <p className="mt-3 text-sm text-gray-600">
+                      {plan.description}
+                    </p>
+                  )}
+
+                  {plan.features && plan.features.length > 0 && (
+                    <ul className="mt-4 space-y-1 text-sm text-gray-600">
+                      {plan.features.map((feature, index) => (
+                        <li key={index}>• {feature}</li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {!subscription ? (
+                    <Button
+                      className="mt-5 w-full"
+                      onClick={() => startTrial(plan.code)}
+                    >
+                      Start Free Trial
+                    </Button>
+                  ) : isCurrent ? (
+                    <Button className="mt-5 w-full" variant="secondary" disabled>
+                      Current Plan
+                    </Button>
+                  ) : (
+                    <Button
+                      className="mt-5 w-full"
+                      onClick={() => changePlan(plan.code)}
+                    >
+                      {Number(plan.price_aed) > Number(subscription.amount_aed)
+                        ? "Upgrade"
+                        : "Downgrade"}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      {subscription && (
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={markPaid}>
+            Mark Paid
+          </Button>
+
+          {subscription.cancel_at_period_end ? (
+            <Button variant="secondary" onClick={reactivateSubscription}>
+              Reactivate
             </Button>
-
-            <Button
-              variant="secondary"
-              onClick={cancelSubscription}
-            >
+          ) : (
+            <Button variant="secondary" onClick={cancelSubscription}>
               Cancel Subscription
             </Button>
+          )}
 
-            <Button
-              variant="secondary"
-              onClick={loadSubscription}
-            >
-              Refresh
-            </Button>
-          </div>
-        </>
+          <Button variant="secondary" onClick={loadSubscription}>
+            Refresh
+          </Button>
+        </div>
       )}
     </div>
   );
