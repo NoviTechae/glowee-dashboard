@@ -232,8 +232,9 @@ export default function AdminSubscriptionsPage() {
                 subscriptions.map((sub) => (
                   <tr key={sub.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4">
-                      <p className="font-medium text-gray-900">{sub.salon_name || "-"}</p>
-                      <p className="text-xs text-gray-500">{sub.salon_city || ""}</p>
+                      <p className="font-medium text-gray-900">
+                        {sub.salon_name || "-"}
+                      </p>
                     </td>
 
                     <td className="py-3 px-4">
