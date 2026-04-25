@@ -113,20 +113,18 @@ export default function SubscriptionPage() {
     }
   }
 
-  async function markPaid() {
+  async function payNow() {
     try {
-      await request(
-        "/dashboard/salon/subscription/mark-paid",
-        "POST",
-        {
-          months: 1,
-        }
+      const data = await request(
+        "/dashboard/salon/subscription/pay-now",
+        "POST"
       );
 
-      toast.success("Subscription activated");
-      loadSubscription();
+      if (data.payment_url) {
+        window.location.href = data.payment_url;
+      }
     } catch (error: any) {
-      toast.error(error.message || "Payment update failed");
+      toast.error(error.message || "Payment failed");
     }
   }
 
@@ -326,8 +324,8 @@ export default function SubscriptionPage() {
 
       {subscription && (
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={markPaid}>
-            Mark Paid
+          <Button onClick={payNow}>
+            Pay Now
           </Button>
 
           {subscription.cancel_at_period_end ? (
