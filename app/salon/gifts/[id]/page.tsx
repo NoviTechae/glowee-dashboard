@@ -4,11 +4,27 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Gift as GiftIcon,
+  Mail,
+  MapPin,
+  MessageSquareText,
+  Phone,
+  ReceiptText,
+  Sparkles,
+  UserRound,
+  WalletCards,
+} from "lucide-react";
+
 import { API_BASE } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
-import { Loading } from "@/app/components/ui/Loading";
-import { Badge } from "@/app/components/ui/Badge";
 
 type GiftDetail = {
   id: string;
@@ -18,19 +34,31 @@ type GiftDetail = {
   gift_fee_aed: number;
   total_aed: number;
   currency: string;
-  status: "active" | "redeemed" | "expired" | "cancelled";
+
+  status:
+    | "active"
+    | "redeemed"
+    | "expired"
+    | "cancelled";
+
   sender_name?: string | null;
   sender_user_name?: string | null;
   sender_phone?: string | null;
   sender_email?: string | null;
+
   recipient_phone: string;
+
   salon_name?: string | null;
+
   message?: string | null;
   theme_id?: string | null;
+
   expires_at: string;
   redeemed_at?: string | null;
   seen_at?: string | null;
+
   sender_seen_rewarded: boolean;
+
   created_at: string;
 };
 
@@ -45,234 +73,719 @@ type UsageBooking = {
   branch_name?: string | null;
 };
 
-const STATUS_VARIANT: Record<string, "success" | "danger" | "gray" | "warning"> = {
-  active: "success",
-  redeemed: "gray",
-  expired: "warning",
-  cancelled: "danger",
-};
-
 export default function GiftDetailPage() {
   const params = useParams();
-  const giftId = Array.isArray(params.id) ? params.id[0] : (params.id as string);
 
-  const [gift, setGift] = useState<GiftDetail | null>(null);
-  const [usageBooking, setUsageBooking] = useState<UsageBooking | null>(null);
+  const giftId = Array.isArray(params.id)
+    ? params.id[0]
+    : (params.id as string);
+
+  const [gift, setGift] =
+    useState<GiftDetail | null>(null);
+
+  const [usageBooking, setUsageBooking] =
+    useState<UsageBooking | null>(null);
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  async function loadGift() {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const token = getToken();
-
-      const res = await fetch(`${API_BASE}/dashboard/salon/gifts/${giftId}`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to load gift");
-      }
-
-      setGift(data.gift);
-      setUsageBooking(data.usage_booking || null);
-    } catch (e: any) {
-      setError(e.message || "Failed to load gift");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
+    async function loadGift() {
+      if (!giftId) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        const token = getToken();
+
+        const res = await fetch(
+          `${API_BASE}/dashboard/salon/gifts/${giftId}`,
+          {
+            headers: {
+              ...(token
+                ? {
+                    Authorization: `Bearer ${token}`,
+                  }
+                : {}),
+            },
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(
+            data.error || "Failed to load gift"
+          );
+        }
+
+        setGift(data.gift || null);
+
+        setUsageBooking(
+          data.usage_booking || null
+        );
+      } catch (e: any) {
+        setError(
+          e?.message || "Failed to load gift"
+        );
+
+        setGift(null);
+        setUsageBooking(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
     loadGift();
   }, [giftId]);
 
-  if (loading) return <Loading size="lg" />;
+  if (loading) {
+    return (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+
+          <p className="mt-4 text-sm text-gray-500">
+            Loading gift...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (error || !gift) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-          <p className="text-red-700 font-semibold">{error || "Gift not found"}</p>
-          <Link href="/salon/gifts" className="mt-4 inline-block text-pink-500 hover:underline">
-            ← Back to gifts
+      <div className="mx-auto max-w-2xl p-6">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+          <AlertCircle className="mx-auto h-6 w-6 text-red-500" />
+
+          <p className="mt-3 text-sm font-medium text-red-800">
+            {error || "Gift not found"}
+          </p>
+
+          <Link
+            href="/salon/gifts"
+            className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-primary-600 transition hover:text-primary-700"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to gifts
           </Link>
         </div>
       </div>
     );
   }
 
-  const senderDisplay = gift.sender_name || gift.sender_user_name || "-";
+  const senderDisplay =
+    gift.sender_name ||
+    gift.sender_user_name ||
+    "Not available";
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="mx-auto max-w-6xl space-y-7 p-6 lg:p-8">
+      {/* Back */}
       <Link
         href="/salon/gifts"
-        className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1"
+        className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800"
       >
-        ← Back to gifts
+        <ArrowLeft className="h-4 w-4" />
+        Back to gifts
       </Link>
 
-      <div className="bg-white border rounded-2xl p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      {/* Header */}
+      <section className="rounded-2xl border border-gray-200 bg-white p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">Gift Details</h1>
-              <Badge variant={STATUS_VARIANT[gift.status] || "gray"}>
-                {gift.status}
-              </Badge>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                <GiftIcon className="h-5 w-5" />
+              </div>
+
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-2xl font-semibold text-gray-900">
+                    Gift details
+                  </h1>
+
+                  <StatusBadge
+                    status={gift.status}
+                  />
+                </div>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Created{" "}
+                  {gift.created_at
+                    ? formatDate(
+                        gift.created_at
+                      )
+                    : "-"}
+                </p>
+              </div>
             </div>
 
-            <p className="mt-2 text-sm text-gray-500">
-              ID: <span className="font-mono">{gift.id}</span>
-            </p>
+            <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
+              <DetailCode
+                label="Gift code"
+                value={gift.code}
+              />
 
-            <p className="mt-1 text-sm text-gray-500">
-              Code: <span className="font-mono font-semibold text-gray-800">{gift.code}</span>
-            </p>
+              <DetailCode
+                label="Gift ID"
+                value={gift.id}
+                compact
+              />
+            </div>
           </div>
 
-          <div className="text-left md:text-right">
-            <p className="text-sm text-gray-500">Total Paid</p>
-            <p className="text-3xl font-bold text-emerald-600">
-              AED {Number(gift.total_aed || 0).toFixed(2)}
+          <div className="md:text-right">
+            <p className="text-xs font-medium text-gray-400">
+              Total paid
+            </p>
+
+            <p className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+              {formatMoney(gift.total_aed)}
             </p>
           </div>
         </div>
+      </section>
 
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-6">
-          <MiniStat title="Gift Amount" value={`AED ${Number(gift.amount_aed || 0).toFixed(2)}`} />
-          <MiniStat title="Subtotal" value={`AED ${Number(gift.subtotal_aed || 0).toFixed(2)}`} />
-          <MiniStat title="Gift Fee" value={`AED ${Number(gift.gift_fee_aed || 0).toFixed(2)}`} />
-        </div>
+      {/* Money */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MoneyCard
+          label="Gift value"
+          value={formatMoney(
+            gift.amount_aed
+          )}
+        />
+
+        <MoneyCard
+          label="Subtotal"
+          value={formatMoney(
+            gift.subtotal_aed
+          )}
+        />
+
+        <MoneyCard
+          label="Gift fee"
+          value={formatMoney(
+            gift.gift_fee_aed
+          )}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <InfoCard title="Sender">
-          <InfoRow label="Display Name" value={senderDisplay} />
-          <InfoRow label="Account Name" value={gift.sender_user_name || "-"} />
-          <InfoRow label="Phone" value={gift.sender_phone || "-"} />
-          <InfoRow label="Email" value={gift.sender_email || "-"} />
-        </InfoCard>
-
-        <InfoCard title="Recipient">
-          <InfoRow label="Phone" value={gift.recipient_phone || "-"} />
-          <InfoRow label="Seen At" value={gift.seen_at ? formatDate(gift.seen_at) : "-"} />
+      {/* People */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <InfoCard
+          icon={
+            <UserRound className="h-5 w-5" />
+          }
+          title="Sender"
+          description="Details for the person who sent the gift."
+        >
           <InfoRow
-            label="Sender Rewarded"
-            value={gift.sender_seen_rewarded ? "Yes" : "No"}
+            label="Name"
+            value={senderDisplay}
+          />
+
+          {gift.sender_user_name &&
+            gift.sender_user_name !==
+              senderDisplay && (
+              <InfoRow
+                label="Account name"
+                value={
+                  gift.sender_user_name
+                }
+              />
+            )}
+
+          <InfoRow
+            label="Phone"
+            value={
+              gift.sender_phone ||
+              "Not available"
+            }
+            icon={
+              <Phone className="h-4 w-4" />
+            }
+          />
+
+          <InfoRow
+            label="Email"
+            value={
+              gift.sender_email ||
+              "Not available"
+            }
+            icon={
+              <Mail className="h-4 w-4" />
+            }
           />
         </InfoCard>
 
-        <InfoCard title="Gift Info">
-          <InfoRow label="Salon" value={gift.salon_name || "Glowee Credit"} />
-          <InfoRow label="Theme" value={gift.theme_id || "-"} />
-          <InfoRow label="Currency" value={gift.currency || "AED"} />
-        </InfoCard>
+        <InfoCard
+          icon={
+            <GiftIcon className="h-5 w-5" />
+          }
+          title="Recipient"
+          description="Recipient delivery and viewing information."
+        >
+          <InfoRow
+            label="Phone"
+            value={
+              gift.recipient_phone ||
+              "Not available"
+            }
+            icon={
+              <Phone className="h-4 w-4" />
+            }
+          />
 
-        <InfoCard title="Timeline">
-          <InfoRow label="Created" value={gift.created_at ? formatDate(gift.created_at) : "-"} />
-          <InfoRow label="Expires" value={gift.expires_at ? formatDate(gift.expires_at) : "-"} />
-          <InfoRow label="Redeemed" value={gift.redeemed_at ? formatDate(gift.redeemed_at) : "-"} />
+          <InfoRow
+            label="Gift viewed"
+            value={
+              gift.seen_at
+                ? formatDate(gift.seen_at)
+                : "Not viewed yet"
+            }
+          />
         </InfoCard>
       </div>
 
-      <InfoCard title="Message">
-        {gift.message ? (
-          <p className="text-gray-700 whitespace-pre-wrap">{gift.message}</p>
-        ) : (
-          <p className="text-gray-400">No message</p>
-        )}
-      </InfoCard>
+      {/* Gift information + timeline */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <InfoCard
+          icon={
+            <Sparkles className="h-5 w-5" />
+          }
+          title="Gift information"
+          description="Gift destination and payment currency."
+        >
+          <InfoRow
+            label="Business"
+            value={
+              gift.salon_name ||
+              "Glowee Credit"
+            }
+          />
 
-      <InfoCard title="Usage Tracking">
-  {usageBooking ? (
-    <>
-      <InfoRow label="Booking ID" value={usageBooking.id} />
+          <InfoRow
+            label="Currency"
+            value={gift.currency || "AED"}
+          />
+        </InfoCard>
 
-      <InfoRow
-        label="Booking Status"
-        value={usageBooking.status}
-      />
+        <InfoCard
+          icon={
+            <CalendarDays className="h-5 w-5" />
+          }
+          title="Timeline"
+          description="Important dates for this gift."
+        >
+          <InfoRow
+            label="Created"
+            value={
+              gift.created_at
+                ? formatDate(
+                    gift.created_at
+                  )
+                : "-"
+            }
+          />
 
-      <InfoRow
-        label="Mode"
-        value={usageBooking.mode}
-      />
+          <InfoRow
+            label="Expires"
+            value={
+              gift.expires_at
+                ? formatDate(
+                    gift.expires_at
+                  )
+                : "-"
+            }
+          />
 
-      <InfoRow
-        label="Salon"
-        value={usageBooking.salon_name || "-"}
-      />
+          <InfoRow
+            label="Redeemed"
+            value={
+              gift.redeemed_at
+                ? formatDate(
+                    gift.redeemed_at
+                  )
+                : "Not redeemed"
+            }
+          />
+        </InfoCard>
+      </div>
 
-      <InfoRow
-        label="Branch"
-        value={usageBooking.branch_name || "-"}
-      />
+      {/* Message */}
+      <section className="rounded-2xl border border-gray-200 bg-white">
+        <SectionHeader
+          icon={
+            <MessageSquareText className="h-5 w-5" />
+          }
+          title="Gift message"
+          description="Personal message included with this gift."
+        />
 
-      <InfoRow
-        label="Scheduled At"
-        value={
-          usageBooking.scheduled_at
-            ? formatDate(usageBooking.scheduled_at)
-            : "-"
-        }
-      />
+        <div className="p-6">
+          {gift.message ? (
+            <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">
+              “{gift.message}”
+            </p>
+          ) : (
+            <p className="text-sm text-gray-400">
+              No message was included.
+            </p>
+          )}
+        </div>
+      </section>
 
-      <InfoRow
-        label="Booking Total"
-        value={`AED ${Number(
-          usageBooking.total_aed || 0
-        ).toFixed(2)}`}
-      />
-    </>
-  ) : (
-    <p className="text-sm text-gray-400">
-      Gift has not been used in a booking yet.
-    </p>
-  )}
-</InfoCard>
+      {/* Usage */}
+      <section className="rounded-2xl border border-gray-200 bg-white">
+        <SectionHeader
+          icon={
+            <ReceiptText className="h-5 w-5" />
+          }
+          title="Booking usage"
+          description="See whether this gift has been applied to a Glowee booking."
+        />
+
+        <div className="p-6">
+          {usageBooking ? (
+            <div className="space-y-5">
+              <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs text-gray-400">
+                    Booking
+                  </p>
+
+                  <p className="mt-1 font-mono text-sm font-medium text-gray-800">
+                    #
+                    {usageBooking.id
+                      .slice(0, 8)
+                      .toUpperCase()}
+                  </p>
+                </div>
+
+                <Link
+                  href={`/salon/bookings/${usageBooking.id}`}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-primary-600 transition hover:text-primary-700"
+                >
+                  View booking
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+
+              <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+                <UsageItem
+                  icon={
+                    <CheckCircle2 className="h-4 w-4" />
+                  }
+                  label="Booking status"
+                  value={formatLabel(
+                    usageBooking.status
+                  )}
+                />
+
+                <UsageItem
+                  icon={
+                    <WalletCards className="h-4 w-4" />
+                  }
+                  label="Mode"
+                  value={formatLabel(
+                    usageBooking.mode
+                  )}
+                />
+
+                <UsageItem
+                  icon={
+                    <MapPin className="h-4 w-4" />
+                  }
+                  label="Location"
+                  value={
+                    usageBooking.branch_name ||
+                    "Not available"
+                  }
+                />
+
+                <UsageItem
+                  icon={
+                    <CalendarDays className="h-4 w-4" />
+                  }
+                  label="Scheduled"
+                  value={
+                    usageBooking.scheduled_at
+                      ? formatDate(
+                          usageBooking.scheduled_at
+                        )
+                      : "-"
+                  }
+                />
+
+                <UsageItem
+                  icon={
+                    <ReceiptText className="h-4 w-4" />
+                  }
+                  label="Booking total"
+                  value={formatMoney(
+                    usageBooking.total_aed
+                  )}
+                />
+
+                {usageBooking.salon_name && (
+                  <UsageItem
+                    icon={
+                      <GiftIcon className="h-4 w-4" />
+                    }
+                    label="Business"
+                    value={
+                      usageBooking.salon_name
+                    }
+                  />
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center">
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gray-100">
+                <Clock3 className="h-5 w-5 text-gray-400" />
+              </div>
+
+              <h3 className="mt-3 text-sm font-medium text-gray-800">
+                Not used in a booking yet
+              </h3>
+
+              <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
+                Booking information will appear here once this gift is applied.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Internal activity */}
+      <section className="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+          Gift activity
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-x-8 gap-y-3 text-sm">
+          <span className="text-gray-500">
+            Recipient viewed:{" "}
+            <strong className="font-medium text-gray-700">
+              {gift.seen_at ? "Yes" : "No"}
+            </strong>
+          </span>
+
+          <span className="text-gray-500">
+            Sender reward processed:{" "}
+            <strong className="font-medium text-gray-700">
+              {gift.sender_seen_rewarded
+                ? "Yes"
+                : "No"}
+            </strong>
+          </span>
+        </div>
+      </section>
     </div>
   );
 }
 
-function MiniStat({ title, value }: { title: string; value: string }) {
+function SectionHeader({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
-    <div className="rounded-xl bg-gray-50 border p-4">
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="mt-1 text-lg font-bold text-gray-900">{value}</p>
+    <div className="border-b border-gray-100 px-6 py-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+          {icon}
+        </div>
+
+        <div>
+          <h2 className="font-semibold text-gray-900">
+            {title}
+          </h2>
+
+          <p className="mt-0.5 text-sm text-gray-500">
+            {description}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
 
 function InfoCard({
+  icon,
   title,
+  description,
   children,
 }: {
+  icon: React.ReactNode;
   title: string;
+  description: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white border rounded-2xl p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">{title}</h2>
-      <div className="space-y-3">{children}</div>
+    <section className="rounded-2xl border border-gray-200 bg-white">
+      <SectionHeader
+        icon={icon}
+        title={title}
+        description={description}
+      />
+
+      <div className="divide-y divide-gray-100 px-6">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-5 py-4">
+      <span className="text-sm text-gray-500">
+        {label}
+      </span>
+
+      <span className="flex min-w-0 items-center gap-1.5 text-right text-sm font-medium text-gray-800">
+        {icon && (
+          <span className="shrink-0 text-gray-400">
+            {icon}
+          </span>
+        )}
+
+        <span className="break-all">
+          {value}
+        </span>
+      </span>
     </div>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function MoneyCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="flex justify-between gap-4 border-b border-gray-100 pb-2 last:border-b-0">
-      <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-900 text-right break-all">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <p className="text-xs text-gray-500">
+        {label}
+      </p>
+
+      <p className="mt-2 text-xl font-semibold text-gray-900">
         {value}
-      </span>
+      </p>
     </div>
   );
+}
+
+function DetailCode({
+  label,
+  value,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  compact?: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-gray-400">
+        {label}
+      </p>
+
+      <p className="mt-1 font-mono text-sm font-medium text-gray-700">
+        {compact
+          ? `${value.slice(0, 12)}...`
+          : value}
+      </p>
+    </div>
+  );
+}
+
+function UsageItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-xs text-gray-400">
+        {icon}
+        {label}
+      </div>
+
+      <p className="mt-1.5 text-sm font-medium text-gray-800">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StatusBadge({
+  status,
+}: {
+  status: GiftDetail["status"];
+}) {
+  const styles: Record<
+    GiftDetail["status"],
+    string
+  > = {
+    active:
+      "bg-emerald-50 text-emerald-700",
+    redeemed:
+      "bg-blue-50 text-blue-700",
+    expired:
+      "bg-amber-50 text-amber-700",
+    cancelled:
+      "bg-red-50 text-red-700",
+  };
+
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${styles[status]}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function formatMoney(
+  value: number | string | null | undefined
+) {
+  return `AED ${Number(value || 0).toFixed(
+    2
+  )}`;
+}
+
+function formatLabel(value?: string | null) {
+  if (!value) return "-";
+
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) =>
+      char.toUpperCase()
+    );
 }
