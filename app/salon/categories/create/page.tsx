@@ -1,8 +1,16 @@
+// app/salon/categories/create/page.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Plus,
+  Tags,
+} from "lucide-react";
+
 import { categoryApi } from "@/lib/api";
 
 export default function CreateCategoryPage() {
@@ -16,16 +24,20 @@ export default function CreateCategoryPage() {
     e.preventDefault();
     setError(null);
 
-    const nm = name.trim();
+    const categoryName = name.trim();
 
-    if (nm.length < 2) {
-      setError("Category name is too short");
+    if (categoryName.length < 2) {
+      setError("Please enter a valid category name");
       return;
     }
 
     try {
       setSaving(true);
-      await categoryApi.create({ name: nm });
+
+      await categoryApi.create({
+        name: categoryName,
+      });
+
       router.push("/salon/categories");
       router.refresh();
     } catch (e: any) {
@@ -36,93 +48,110 @@ export default function CreateCategoryPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="mx-auto max-w-3xl">
-
-        {/* Back */}
+    <div className="mx-auto max-w-3xl space-y-7 p-6 lg:p-8">
+      {/* Header */}
+      <div>
         <Link
           href="/salon/categories"
-          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800"
         >
-          ← Back to categories
+          <ArrowLeft className="h-4 w-4" />
+          Back to categories
         </Link>
 
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Add Category
+        <div className="mt-5">
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+            Add category
           </h1>
-          <p className="text-sm text-gray-500 mt-2">
-            Create a new category to organize your services
+
+          <p className="mt-1.5 text-sm text-gray-500">
+            Create a category to keep your services organized.
           </p>
         </div>
+      </div>
 
-        {/* Error */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
-            <span className="text-red-700 font-medium">{error}</span>
+      {/* Error */}
+      {error && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+
+          <div>
+            <p className="text-sm font-medium text-red-800">
+              Something went wrong
+            </p>
+
+            <p className="mt-0.5 text-sm text-red-600">
+              {error}
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
-        <form onSubmit={onSubmit} className="space-y-6">
-
-          {/* Category Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-
-            <div className="flex items-center gap-2 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                </svg>
+      <form onSubmit={onSubmit} className="space-y-6">
+        <section className="rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                <Tags className="h-4 w-4" />
               </div>
 
-              <h2 className="text-xl font-bold text-gray-900">
-                Category Information
-              </h2>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Category details
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Customers will see this category when browsing services.
+                </p>
+              </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Category Name *
-              </label>
-
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setError(null);
-                }}
-                placeholder="e.g. Hair, Nails, Makeup"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-              />
-            </div>
-
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-4">
+          <div className="p-6">
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Category name <span className="text-red-500">*</span>
+            </label>
 
-            <button
-              type="button"
-              onClick={() => router.push("/salon/categories")}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError(null);
+              }}
+              placeholder="e.g. Hair, Nails, Facial"
+              autoFocus
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+            />
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3.5 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? "Creating..." : "Create Category"}
-            </button>
-
+            <p className="mt-2 text-xs text-gray-400">
+              Keep category names short and easy for customers to understand.
+            </p>
           </div>
+        </section>
 
-        </form>
-      </div>
+        {/* Actions */}
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => router.push("/salon/categories")}
+            disabled={saving}
+            className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+
+            {saving ? "Creating..." : "Create category"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
