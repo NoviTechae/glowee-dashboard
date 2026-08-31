@@ -4,6 +4,19 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Building2,
+  Check,
+  Clock3,
+  Home,
+  Info,
+  MapPin,
+  Save,
+  Wallet,
+} from "lucide-react";
+
 import { api, branchApi, serviceApi } from "@/lib/api";
 
 type BranchRow = {
@@ -24,17 +37,11 @@ type AvailabilityRow = {
   is_active: boolean;
 };
 
-function toNum(v: any, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+function toNum(value: any, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
-// يقبل:
-// 30      => 30 mins
-// 1h      => 60 mins
-// 1.5h    => 90 mins
-// 2:30    => 150 mins
-// 90m     => 90 mins
 function parseDurationToMinutes(input: string): number | null {
   const raw = String(input || "").trim().toLowerCase();
 
@@ -46,52 +53,68 @@ function parseDurationToMinutes(input: string): number | null {
 
   if (/^\d+(\.\d+)?h$/.test(raw)) {
     const hours = Number(raw.replace("h", ""));
+
     if (!Number.isFinite(hours)) return null;
+
     return Math.round(hours * 60);
   }
 
   if (/^\d+m$/.test(raw)) {
-    const mins = Number(raw.replace("m", ""));
-    if (!Number.isFinite(mins)) return null;
-    return mins;
+    const minutes = Number(raw.replace("m", ""));
+
+    if (!Number.isFinite(minutes)) return null;
+
+    return minutes;
   }
 
   if (/^\d{1,2}:\d{2}$/.test(raw)) {
-    const [h, m] = raw.split(":").map(Number);
-    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-    return h * 60 + m;
+    const [hours, minutes] = raw.split(":").map(Number);
+
+    if (
+      !Number.isFinite(hours) ||
+      !Number.isFinite(minutes) ||
+      minutes > 59
+    ) {
+      return null;
+    }
+
+    return hours * 60 + minutes;
   }
 
   return null;
 }
 
-function formatDurationInput(mins?: number | null) {
-  const n = Number(mins || 0);
-  if (!n) return "";
+function formatDurationInput(minutes?: number | null) {
+  const value = Number(minutes || 0);
 
-  if (n % 60 === 0) {
-    return `${n / 60}h`;
+  if (!value) return "";
+
+  if (value % 60 === 0) {
+    return `${value / 60}h`;
   }
 
-  if (n > 60) {
-    const h = Math.floor(n / 60);
-    const m = n % 60;
-    return `${h}:${String(m).padStart(2, "0")}`;
+  if (value > 60) {
+    const hours = Math.floor(value / 60);
+    const mins = value % 60;
+
+    return `${hours}:${String(mins).padStart(2, "0")}`;
   }
 
-  return String(n);
+  return String(value);
 }
 
-function formatDurationPreview(mins?: number | null) {
-  const n = Number(mins || 0);
-  if (!n) return "—";
+function formatDurationPreview(minutes?: number | null) {
+  const value = Number(minutes || 0);
 
-  const h = Math.floor(n / 60);
-  const m = n % 60;
+  if (!value) return "—";
 
-  if (h > 0 && m > 0) return `${h}h ${m}m`;
-  if (h > 0) return `${h}h`;
-  return `${m}m`;
+  const hours = Math.floor(value / 60);
+  const mins = value % 60;
+
+  if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h`;
+
+  return `${mins}m`;
 }
 
 export default function ServiceAvailabilityPage() {
@@ -109,17 +132,26 @@ export default function ServiceAvailabilityPage() {
       setLoading(true);
       setErr(null);
 
-      if (!serviceId) throw new Error("Missing serviceId");
+      if (!serviceId) {
+        throw new Error("Missing service ID");
+      }
 
-      const [resBranches, resAvail] = await Promise.all([
+      const [resBranches, resAvailability] = await Promise.all([
         branchApi.getAll(),
         serviceApi.getAvailability(serviceId),
       ]);
 
-      setBranches(Array.isArray(resBranches.data) ? resBranches.data : []);
-      setRows(Array.isArray(resAvail.data) ? resAvail.data : []);
+      setBranches(
+        Array.isArray(resBranches.data) ? resBranches.data : []
+      );
+
+      setRows(
+        Array.isArray(resAvailability.data)
+          ? resAvailability.data
+          : []
+      );
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to load availability");
+      setErr(e?.message ?? "Failed to load service setup");
       setBranches([]);
       setRows([]);
     } finally {
@@ -129,19 +161,31 @@ export default function ServiceAvailabilityPage() {
 
   useEffect(() => {
     if (!serviceId) return;
+
     loadAll();
   }, [serviceId]);
 
   const existing = useMemo(() => {
-    const m = new Map<string, AvailabilityRow>();
-    for (const r of rows) m.set(`${r.branch_id}:${r.mode}`, r);
-    return m;
+    const map = new Map<string, AvailabilityRow>();
+
+    for (const row of rows) {
+      map.set(`${row.branch_id}:${row.mode}`, row);
+    }
+
+    return map;
   }, [rows]);
 
-  async function upsert(branchId: string, mode: "in_salon" | "home", patch: any) {
+  async function upsert(
+    branchId: string,
+    mode: "in_salon" | "home",
+    patch: any
+  ) {
     try {
       setErr(null);
-      if (!serviceId) throw new Error("Missing serviceId");
+
+      if (!serviceId) {
+        throw new Error("Missing service ID");
+      }
 
       await api.put(
         `/dashboard/salon/branches/${branchId}/services/${serviceId}/availability`,
@@ -156,389 +200,608 @@ export default function ServiceAvailabilityPage() {
 
       await loadAll();
     } catch (e: any) {
-      setErr(e?.message ?? "Save failed");
+      setErr(e?.message ?? "Failed to save service setup");
+      throw e;
     }
   }
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
+      <div className="flex min-h-[420px] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-purple-600"></div>
-          <p className="mt-4 text-gray-600">Loading availability...</p>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+
+          <p className="mt-4 text-sm text-gray-500">
+            Loading service setup...
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto max-w-[1200px] space-y-7 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-3xl font-bold text-transparent">
-            Service Availability
+      <div>
+        <Link
+          href="/salon/services"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to services
+        </Link>
+
+        <div className="mt-5">
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+            Pricing & availability
           </h1>
-          <p className="mt-2 text-sm text-gray-500">
-            Set price and duration per branch. Home mode supports travel fee.
+
+          <p className="mt-1.5 text-sm text-gray-500">
+            Set where this service is available, its price and duration.
           </p>
-        </div>
-
-        <div className="flex gap-3">
-          <Link
-            href="/salon/services"
-            className="flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to services
-          </Link>
-
-          <button
-            onClick={loadAll}
-            className="flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            Refresh
-          </button>
         </div>
       </div>
 
       {/* Error */}
       {err && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <div className="flex items-center gap-3">
-            <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium text-red-700">{err}</span>
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+
+          <div>
+            <p className="text-sm font-medium text-red-800">
+              Something went wrong
+            </p>
+
+            <p className="mt-0.5 text-sm text-red-600">
+              {err}
+            </p>
           </div>
         </div>
       )}
 
-      {/* Branches */}
+      {/* Helper */}
+      <div className="flex items-start gap-3 rounded-xl border border-primary-100 bg-primary-50/50 px-4 py-3">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
+
+        <p className="text-sm leading-6 text-gray-600">
+          You can offer the same service at a business location,
+          as a home service, or both. Each option can have its own
+          price and duration.
+        </p>
+      </div>
+
+      {/* Locations */}
       {branches.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-12 shadow-sm">
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
-              <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 7l9-4 9 4-9 4-9-4zm0 0v10l9 4 9-4V7M9 11l3 1 3-1"
-                />
-              </svg>
-            </div>
-            <h3 className="mb-2 text-lg font-semibold text-gray-900">No branches yet</h3>
-            <p className="text-gray-500">Create a branch first to configure availability.</p>
+        <div className="rounded-2xl border border-gray-200 bg-white px-6 py-14 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+            <MapPin className="h-5 w-5 text-gray-400" />
           </div>
+
+          <h2 className="mt-4 text-lg font-semibold text-gray-900">
+            No locations are set up yet
+          </h2>
+
+          <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+            Your business location needs to be set up before pricing
+            and availability can be configured.
+          </p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {branches.map((b) => (
-            <BranchAvailabilityCard
-              key={b.id}
-              branch={b}
+        <div className="space-y-5">
+          {branches.map((branch) => (
+            <LocationAvailabilityCard
+              key={branch.id}
+              branch={branch}
               existing={existing}
               onSave={upsert}
             />
           ))}
         </div>
       )}
+
+      {branches.length > 0 && (
+        <div className="flex justify-end">
+          <Link
+            href="/salon/services"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+          >
+            <Check className="h-4 w-4" />
+            Done
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
 
-function BranchAvailabilityCard({
+function LocationAvailabilityCard({
   branch,
   existing,
   onSave,
 }: {
   branch: BranchRow;
   existing: Map<string, AvailabilityRow>;
-  onSave: (branchId: string, mode: "in_salon" | "home", patch: any) => Promise<void>;
+  onSave: (
+    branchId: string,
+    mode: "in_salon" | "home",
+    patch: any
+  ) => Promise<void>;
 }) {
-  const curIn = existing.get(`${branch.id}:in_salon`);
-  const curHome = existing.get(`${branch.id}:home`);
+  const currentSalon = existing.get(`${branch.id}:in_salon`);
+  const currentHome = existing.get(`${branch.id}:home`);
 
-  const [inActive, setInActive] = useState(curIn?.is_active ?? false);
-  const [inPrice, setInPrice] = useState(String(curIn?.price_aed ?? ""));
-  const [inDuration, setInDuration] = useState(formatDurationInput(curIn?.duration_mins ?? null));
+  const [salonActive, setSalonActive] = useState(
+    currentSalon?.is_active ?? false
+  );
 
-  const [homeActive, setHomeActive] = useState(curHome?.is_active ?? false);
-  const [homePrice, setHomePrice] = useState(String(curHome?.price_aed ?? ""));
-  const [homeDuration, setHomeDuration] = useState(formatDurationInput(curHome?.duration_mins ?? null));
-  const [homeTravelFee, setHomeTravelFee] = useState(String(curHome?.travel_fee_aed ?? 0));
+  const [salonPrice, setSalonPrice] = useState(
+    String(currentSalon?.price_aed ?? "")
+  );
 
-  const [savingIn, setSavingIn] = useState(false);
+  const [salonDuration, setSalonDuration] = useState(
+    formatDurationInput(currentSalon?.duration_mins ?? null)
+  );
+
+  const [homeActive, setHomeActive] = useState(
+    currentHome?.is_active ?? false
+  );
+
+  const [homePrice, setHomePrice] = useState(
+    String(currentHome?.price_aed ?? "")
+  );
+
+  const [homeDuration, setHomeDuration] = useState(
+    formatDurationInput(currentHome?.duration_mins ?? null)
+  );
+
+  const [homeTravelFee, setHomeTravelFee] = useState(
+    String(currentHome?.travel_fee_aed ?? 0)
+  );
+
+  const [savingSalon, setSavingSalon] = useState(false);
   const [savingHome, setSavingHome] = useState(false);
+
+  const [savedSalon, setSavedSalon] = useState(false);
+  const [savedHome, setSavedHome] = useState(false);
+
   const [localErr, setLocalErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setInActive(curIn?.is_active ?? false);
-    setInPrice(String(curIn?.price_aed ?? ""));
-    setInDuration(formatDurationInput(curIn?.duration_mins ?? null));
+    setSalonActive(currentSalon?.is_active ?? false);
+    setSalonPrice(String(currentSalon?.price_aed ?? ""));
+    setSalonDuration(
+      formatDurationInput(currentSalon?.duration_mins ?? null)
+    );
 
-    setHomeActive(curHome?.is_active ?? false);
-    setHomePrice(String(curHome?.price_aed ?? ""));
-    setHomeDuration(formatDurationInput(curHome?.duration_mins ?? null));
-    setHomeTravelFee(String(curHome?.travel_fee_aed ?? 0));
+    setHomeActive(currentHome?.is_active ?? false);
+    setHomePrice(String(currentHome?.price_aed ?? ""));
+    setHomeDuration(
+      formatDurationInput(currentHome?.duration_mins ?? null)
+    );
+    setHomeTravelFee(
+      String(currentHome?.travel_fee_aed ?? 0)
+    );
 
     setLocalErr(null);
-  }, [branch.id, curIn?.id, curHome?.id]);
+  }, [
+    branch.id,
+    currentSalon?.id,
+    currentHome?.id,
+  ]);
 
-  async function saveInSalon() {
-    const mins = parseDurationToMinutes(inDuration);
-    if (mins == null || mins < 5) {
-      setLocalErr("In-salon duration is invalid. Examples: 30, 90, 1h, 1.5h, 2:30");
+  function validatePrice(
+    value: string,
+    label: string
+  ): number | null {
+    if (value.trim() === "") {
+      setLocalErr(`${label} is required.`);
+      return null;
+    }
+
+    const parsed = Number(value);
+
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setLocalErr(`${label} must be a valid amount.`);
+      return null;
+    }
+
+    return parsed;
+  }
+
+  async function saveSalon() {
+    const duration = parseDurationToMinutes(salonDuration);
+
+    if (duration == null || duration < 5) {
+      setLocalErr(
+        "Enter a valid duration. For example: 30, 1h or 1:30."
+      );
       return;
     }
 
+    const price = validatePrice(salonPrice, "Price");
+
+    if (price == null) return;
+
     try {
-      setSavingIn(true);
+      setSavingSalon(true);
+      setSavedSalon(false);
       setLocalErr(null);
 
       await onSave(branch.id, "in_salon", {
-        is_active: inActive,
-        price_aed: inPrice === "" ? 0 : Number(inPrice),
-        duration_mins: mins,
+        is_active: salonActive,
+        price_aed: price,
+        duration_mins: duration,
         travel_fee_aed: 0,
       });
+
+      setSavedSalon(true);
+
+      window.setTimeout(() => setSavedSalon(false), 2000);
+    } catch {
+      // Global error is handled by parent.
     } finally {
-      setSavingIn(false);
+      setSavingSalon(false);
     }
   }
 
-  async function saveHomeMode() {
-    const mins = parseDurationToMinutes(homeDuration);
-    if (mins == null || mins < 5) {
-      setLocalErr("Home duration is invalid. Examples: 30, 90, 1h, 1.5h, 2:30");
+  async function saveHome() {
+    const duration = parseDurationToMinutes(homeDuration);
+
+    if (duration == null || duration < 5) {
+      setLocalErr(
+        "Enter a valid home service duration. For example: 30, 1h or 1:30."
+      );
+      return;
+    }
+
+    const price = validatePrice(
+      homePrice,
+      "Home service price"
+    );
+
+    if (price == null) return;
+
+    const travelFee =
+      homeTravelFee.trim() === ""
+        ? 0
+        : Number(homeTravelFee);
+
+    if (
+      !Number.isFinite(travelFee) ||
+      travelFee < 0
+    ) {
+      setLocalErr(
+        "Travel fee must be a valid amount."
+      );
       return;
     }
 
     try {
       setSavingHome(true);
+      setSavedHome(false);
       setLocalErr(null);
 
       await onSave(branch.id, "home", {
         is_active: homeActive,
-        price_aed: homePrice === "" ? 0 : Number(homePrice),
-        duration_mins: mins,
-        travel_fee_aed: homeTravelFee === "" ? 0 : Number(homeTravelFee),
+        price_aed: price,
+        duration_mins: duration,
+        travel_fee_aed: travelFee,
       });
+
+      setSavedHome(true);
+
+      window.setTimeout(() => setSavedHome(false), 2000);
+    } catch {
+      // Global error is handled by parent.
     } finally {
       setSavingHome(false);
     }
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      {/* Branch Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4">
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      {/* Location header */}
+      <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500">
-            <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 21h18M5 21V7l8-4 8 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"
-              />
-            </svg>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-500">
+            <MapPin className="h-5 w-5" />
           </div>
 
           <div>
-            <h2 className="text-lg font-bold text-gray-900">{branch.name}</h2>
-            <p className="text-sm text-gray-500">
-              {branch.supports_home_services ? "Supports home services" : "Home services disabled"}
+            <h2 className="font-semibold text-gray-900">
+              {branch.name}
+            </h2>
+
+            <p className="mt-0.5 text-sm text-gray-500">
+              {branch.supports_home_services
+                ? "In-location and home services supported"
+                : "Business location"}
             </p>
           </div>
         </div>
 
         <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+          className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${
             branch.is_active
-              ? "border border-green-200 bg-green-100 text-green-700"
-              : "border border-gray-200 bg-gray-100 text-gray-600"
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-gray-100 text-gray-500"
           }`}
         >
           {branch.is_active ? "Active" : "Inactive"}
         </span>
       </div>
 
-      <div className="space-y-6 p-6">
-        {localErr && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+      <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-2">
+        {/* In salon */}
+        <ModeCard
+          title="At business location"
+          description="Customer visits your location for this service."
+          icon={Building2}
+          enabled={salonActive}
+          onEnabledChange={setSalonActive}
+          price={salonPrice}
+          onPriceChange={setSalonPrice}
+          duration={salonDuration}
+          onDurationChange={setSalonDuration}
+          current={currentSalon}
+          onSave={saveSalon}
+          saving={savingSalon}
+          saved={savedSalon}
+        />
+
+        {/* Home service */}
+        <ModeCard
+          title="Home service"
+          description="Your team travels to the customer's location."
+          icon={Home}
+          enabled={homeActive}
+          onEnabledChange={setHomeActive}
+          price={homePrice}
+          onPriceChange={setHomePrice}
+          duration={homeDuration}
+          onDurationChange={setHomeDuration}
+          travelFee={homeTravelFee}
+          onTravelFeeChange={setHomeTravelFee}
+          current={currentHome}
+          onSave={saveHome}
+          saving={savingHome}
+          saved={savedHome}
+          disabled={!branch.supports_home_services}
+        />
+      </div>
+
+      {localErr && (
+        <div className="border-t border-red-100 bg-red-50 px-5 py-3">
+          <div className="flex items-center gap-2 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             {localErr}
           </div>
-        )}
+        </div>
+      )}
+    </section>
+  );
+}
 
-        {/* In-salon */}
-        <div className="rounded-2xl border border-gray-200 p-5">
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">In-salon</h3>
-              {curIn ? (
-                <p className="mt-1 text-sm text-gray-500">
-                  Current: {formatDurationPreview(curIn.duration_mins)} · AED{" "}
-                  {Number(curIn.price_aed || 0).toFixed(0)}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-gray-500">No in-salon setup yet</p>
-              )}
-            </div>
+function ModeCard({
+  title,
+  description,
+  icon: Icon,
+  enabled,
+  onEnabledChange,
+  price,
+  onPriceChange,
+  duration,
+  onDurationChange,
+  travelFee,
+  onTravelFeeChange,
+  current,
+  onSave,
+  saving,
+  saved,
+  disabled = false,
+}: {
+  title: string;
+  description: string;
+  icon: React.ElementType;
 
-            <label className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-900">
-              <input
-                type="checkbox"
-                checked={inActive}
-                onChange={(e) => setInActive(e.target.checked)}
-                className="h-4 w-4"
-              />
-              Enabled
-            </label>
+  enabled: boolean;
+  onEnabledChange: (value: boolean) => void;
+
+  price: string;
+  onPriceChange: (value: string) => void;
+
+  duration: string;
+  onDurationChange: (value: string) => void;
+
+  travelFee?: string;
+  onTravelFeeChange?: (value: string) => void;
+
+  current?: AvailabilityRow;
+
+  onSave: () => void;
+  saving: boolean;
+  saved: boolean;
+
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border border-gray-200 p-5 ${
+        disabled ? "bg-gray-50 opacity-70" : "bg-white"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+            <Icon className="h-5 w-5" />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Price AED
-              </label>
-              <input
-                value={inPrice}
-                onChange={(e) => setInPrice(e.target.value)}
-                placeholder="Price AED"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3"
-              />
-            </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">
+              {title}
+            </h3>
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Duration
-              </label>
-              <input
-                value={inDuration}
-                onChange={(e) => setInDuration(e.target.value)}
-                placeholder="30, 90, 1h, 1.5h, 2:30"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3"
-              />
-            </div>
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              {description}
+            </p>
           </div>
-
-          <div className="mt-3 text-xs font-semibold text-gray-500">
-            Examples: 30 = 30 mins, 1h = 60 mins, 1.5h = 90 mins, 2:30 = 150 mins
-          </div>
-
-          <button
-            onClick={saveInSalon}
-            disabled={savingIn}
-            className="mt-5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3 font-semibold text-white shadow-lg transition-all hover:shadow-xl disabled:opacity-50"
-          >
-            {savingIn ? "Saving..." : "Save In-salon"}
-          </button>
         </div>
 
-        {/* Home */}
-        <div
-          className={`rounded-2xl border border-gray-200 p-5 ${
-            branch.supports_home_services ? "" : "opacity-60"
-          }`}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          disabled={disabled}
+          onClick={() => onEnabledChange(!enabled)}
+          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition ${
+            enabled && !disabled
+              ? "bg-primary-600"
+              : "bg-gray-300"
+          } disabled:cursor-not-allowed`}
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Home</h3>
-              {curHome ? (
-                <p className="mt-1 text-sm text-gray-500">
-                  Current: {formatDurationPreview(curHome.duration_mins)} · AED{" "}
-                  {Number(curHome.price_aed || 0).toFixed(0)} · Travel AED{" "}
-                  {Number(curHome.travel_fee_aed || 0).toFixed(0)}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-gray-500">No home setup yet</p>
-              )}
-            </div>
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition ${
+              enabled
+                ? "translate-x-[22px] translate-y-0.5"
+                : "translate-x-0.5 translate-y-0.5"
+            }`}
+          />
+        </button>
+      </div>
 
-            <label className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-900">
-              <input
-                type="checkbox"
-                checked={homeActive}
-                onChange={(e) => setHomeActive(e.target.checked)}
-                disabled={!branch.supports_home_services}
-                className="h-4 w-4"
-              />
-              Enabled
-            </label>
-          </div>
+      {current && (
+        <div className="mt-4 rounded-xl bg-gray-50 px-3.5 py-2.5 text-xs text-gray-500">
+          Current:{" "}
+          <span className="font-medium text-gray-700">
+            AED {Number(current.price_aed || 0).toFixed(0)}
+          </span>
+          {" · "}
+          {formatDurationPreview(current.duration_mins)}
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Price AED
-              </label>
-              <input
-                value={homePrice}
-                onChange={(e) => setHomePrice(e.target.value)}
-                placeholder="Price AED"
-                disabled={!branch.supports_home_services}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 disabled:bg-gray-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Duration
-              </label>
-              <input
-                value={homeDuration}
-                onChange={(e) => setHomeDuration(e.target.value)}
-                placeholder="30, 90, 1h, 1.5h, 2:30"
-                disabled={!branch.supports_home_services}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 disabled:bg-gray-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Travel Fee AED
-              </label>
-              <input
-                value={homeTravelFee}
-                onChange={(e) => setHomeTravelFee(e.target.value)}
-                placeholder="Travel fee AED"
-                disabled={!branch.supports_home_services}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 disabled:bg-gray-100"
-              />
-            </div>
-          </div>
-
-          <div className="mt-3 text-xs font-semibold text-gray-500">
-            Examples: 30 = 30 mins, 1h = 60 mins, 1.5h = 90 mins, 2:30 = 150 mins
-          </div>
-
-          <button
-            onClick={saveHomeMode}
-            disabled={!branch.supports_home_services || savingHome}
-            className="mt-5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3 font-semibold text-white shadow-lg transition-all hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {savingHome ? "Saving..." : "Save Home"}
-          </button>
-
-          {!branch.supports_home_services && (
-            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-600">
-              This branch does not support home services. Enable it from Branch settings first.
-            </div>
+          {current.mode === "home" && (
+            <>
+              {" · "}
+              Travel AED{" "}
+              {Number(
+                current.travel_fee_aed || 0
+              ).toFixed(0)}
+            </>
           )}
         </div>
+      )}
+
+      {!current && (
+        <p className="mt-4 text-xs text-gray-400">
+          Not configured yet
+        </p>
+      )}
+
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-600">
+            <Wallet className="h-3.5 w-3.5" />
+            Price
+          </label>
+
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+              AED
+            </span>
+
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={price}
+              onChange={(e) =>
+                onPriceChange(e.target.value)
+              }
+              disabled={disabled}
+              placeholder="0"
+              className="w-full rounded-xl border border-gray-200 py-2.5 pl-12 pr-3 text-sm outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100 disabled:bg-gray-100"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-600">
+            <Clock3 className="h-3.5 w-3.5" />
+            Duration
+          </label>
+
+          <input
+            value={duration}
+            onChange={(e) =>
+              onDurationChange(e.target.value)
+            }
+            disabled={disabled}
+            placeholder="e.g. 45, 1h, 1:30"
+            className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100 disabled:bg-gray-100"
+          />
+        </div>
       </div>
+
+      {onTravelFeeChange && (
+        <div className="mt-4">
+          <label className="mb-2 block text-xs font-medium text-gray-600">
+            Travel fee
+          </label>
+
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+              AED
+            </span>
+
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={travelFee}
+              onChange={(e) =>
+                onTravelFeeChange(e.target.value)
+              }
+              disabled={disabled}
+              placeholder="0"
+              className="w-full rounded-xl border border-gray-200 py-2.5 pl-12 pr-3 text-sm outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100 disabled:bg-gray-100"
+            />
+          </div>
+
+          <p className="mt-1.5 text-xs text-gray-400">
+            Set to AED 0 if there is no additional travel fee.
+          </p>
+        </div>
+      )}
+
+      <div className="mt-5 flex items-center justify-between">
+        <p className="text-xs text-gray-400">
+          Duration examples: 30, 1h, 1.5h or 1:30
+        </p>
+
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={disabled || saving}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saved ? (
+            <>
+              <Check className="h-4 w-4" />
+              Saved
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              {saving ? "Saving..." : "Save"}
+            </>
+          )}
+        </button>
+      </div>
+
+      {disabled && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-xs leading-5 text-gray-500">
+          Home services are not enabled for this business location.
+        </div>
+      )}
     </div>
   );
 }
