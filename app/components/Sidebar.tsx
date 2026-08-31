@@ -64,7 +64,7 @@ const salonSections = [
         icon: Sparkles,
       },
       {
-        label: "Staff",
+        label: "Team",
         href: "/salon/staff",
         icon: Users,
       },
