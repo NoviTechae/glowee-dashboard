@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card } from "@/app/components/ui/Card";
-import { Button } from "@/app/components/ui/Button";
-import { Loading } from "@/app/components/ui/Loading";
+import {
+  CalendarDays,
+  MapPin,
+  Search,
+  Star,
+  UserRound,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+
 import { API_BASE } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
-import { toast } from "sonner";
 
 type Review = {
   id: string;
@@ -25,214 +31,613 @@ type Review = {
 type ReviewStats = {
   avg_rating: number;
   total_reviews: number;
-  breakdown: { rating: number; count: number }[];
+  breakdown: {
+    rating: number;
+    count: number;
+  }[];
 };
+
+type RatingFilter =
+  | "all"
+  | "5"
+  | "4"
+  | "3"
+  | "2"
+  | "1";
 
 export default function SalonReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [stats, setStats] = useState<ReviewStats | null>(null);
+  const [stats, setStats] =
+    useState<ReviewStats | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] =
+    useState(false);
 
   const [search, setSearch] = useState("");
-  const [rating, setRating] = useState("all");
+  const [rating, setRating] =
+    useState<RatingFilter>("all");
 
   async function request(path: string) {
     const token = getToken();
 
     const res = await fetch(`${API_BASE}${path}`, {
       headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {}),
       },
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || "Request failed");
+      throw new Error(
+        data.error || "Request failed"
+      );
     }
 
     return data;
   }
 
-  async function loadAll() {
+  useEffect(() => {
+    loadAll("", "all", true);
+  }, []);
+
+  async function loadAll(
+    nextSearch = search,
+    nextRating: RatingFilter = rating,
+    initial = false
+  ) {
     try {
-      setLoading(true);
+      if (initial) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
 
       const params = new URLSearchParams();
-      if (search.trim()) params.set("search", search.trim());
-      if (rating !== "all") params.set("rating", rating);
 
-      const [reviewsRes, statsRes] = await Promise.all([
-        request(`/dashboard/salon/reviews?${params.toString()}`),
-        request("/dashboard/salon/reviews/stats"),
-      ]);
+      if (nextSearch.trim()) {
+        params.set(
+          "search",
+          nextSearch.trim()
+        );
+      }
 
-      setReviews(Array.isArray(reviewsRes.data) ? reviewsRes.data : []);
+      if (nextRating !== "all") {
+        params.set("rating", nextRating);
+      }
+
+      const query = params.toString();
+
+      const [reviewsRes, statsRes] =
+        await Promise.all([
+          request(
+            `/dashboard/salon/reviews${
+              query ? `?${query}` : ""
+            }`
+          ),
+          request(
+            "/dashboard/salon/reviews/stats"
+          ),
+        ]);
+
+      setReviews(
+        Array.isArray(reviewsRes.data)
+          ? reviewsRes.data
+          : []
+      );
+
       setStats(statsRes);
     } catch (error: any) {
-      toast.error(error.message || "Failed to load reviews");
+      toast.error(
+        error.message ||
+          "Failed to load reviews"
+      );
+
       setReviews([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
-  useEffect(() => {
-    loadAll();
-  }, [rating]);
+  function handleSearch() {
+    loadAll(search, rating);
+  }
 
-  if (loading) return <Loading size="lg" />;
+  function handleRatingChange(
+    nextRating: RatingFilter
+  ) {
+    setRating(nextRating);
 
-  const avg = Number(stats?.avg_rating || 0);
+    loadAll(search, nextRating);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setRating("all");
+
+    loadAll("", "all");
+  }
+
+  function handleSearchKeyDown(
+    event: React.KeyboardEvent<HTMLInputElement>
+  ) {
+    if (event.key === "Enter") {
+      handleSearch();
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+
+          <p className="mt-4 text-sm text-gray-500">
+            Loading reviews...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const averageRating = Number(
+    stats?.avg_rating || 0
+  );
+
+  const fiveStarReviews =
+    stats?.breakdown.find(
+      (item) => item.rating === 5
+    )?.count || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-7 p-6 lg:p-8">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Reviews</h1>
-        <p className="text-gray-600">
-          View customer ratings and feedback for your salon
+        <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+          Reviews
+        </h1>
+
+        <p className="mt-1.5 max-w-2xl text-sm text-gray-500">
+          See what customers are saying about your
+          business and recent bookings.
         </p>
       </div>
 
+      {/* Summary */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard
-            title="Average Rating"
-            value={`${avg.toFixed(1)} ★`}
-            color="text-yellow-600"
-          />
-          <StatCard title="Total Reviews" value={stats.total_reviews} />
-          <StatCard
-            title="5-Star Reviews"
+        <div className="grid gap-4 sm:grid-cols-3">
+          <SummaryCard
+            label="Average rating"
             value={
-              stats.breakdown.find((b) => b.rating === 5)?.count || 0
+              stats.total_reviews > 0
+                ? averageRating.toFixed(1)
+                : "—"
             }
-            color="text-emerald-600"
+            icon={
+              <Star
+                className="h-5 w-5"
+                fill="currentColor"
+              />
+            }
+            footer={
+              stats.total_reviews > 0
+                ? "out of 5"
+                : "No reviews yet"
+            }
+          />
+
+          <SummaryCard
+            label="Total reviews"
+            value={stats.total_reviews}
+            icon={
+              <UserRound className="h-5 w-5" />
+            }
+            footer="Customer feedback received"
+          />
+
+          <SummaryCard
+            label="5-star reviews"
+            value={fiveStarReviews}
+            icon={
+              <Star
+                className="h-5 w-5"
+                fill="currentColor"
+              />
+            }
+            footer={
+              stats.total_reviews > 0
+                ? `${Math.round(
+                    (fiveStarReviews /
+                      stats.total_reviews) *
+                      100
+                  )}% of all reviews`
+                : "No reviews yet"
+            }
           />
         </div>
       )}
 
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Rating breakdown */}
+      {stats && stats.total_reviews > 0 && (
+        <section className="rounded-2xl border border-gray-200 bg-white p-6">
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Search
-            </label>
+            <h2 className="font-semibold text-gray-900">
+              Rating breakdown
+            </h2>
+
+            <p className="mt-0.5 text-sm text-gray-500">
+              Distribution of customer ratings.
+            </p>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {[5, 4, 3, 2, 1].map(
+              (star) => {
+                const count =
+                  stats.breakdown.find(
+                    (item) =>
+                      item.rating === star
+                  )?.count || 0;
+
+                const percentage =
+                  stats.total_reviews > 0
+                    ? (count /
+                        stats.total_reviews) *
+                      100
+                    : 0;
+
+                return (
+                  <div
+                    key={star}
+                    className="grid grid-cols-[50px_1fr_45px] items-center gap-3"
+                  >
+                    <div className="flex items-center gap-1 text-sm font-medium text-gray-700">
+                      {star}
+
+                      <Star
+                        className="h-3.5 w-3.5 text-amber-400"
+                        fill="currentColor"
+                      />
+                    </div>
+
+                    <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="h-full rounded-full bg-primary-500 transition-all"
+                        style={{
+                          width: `${percentage}%`,
+                        }}
+                      />
+                    </div>
+
+                    <p className="text-right text-xs text-gray-400">
+                      {count}
+                    </p>
+                  </div>
+                );
+              }
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Filters */}
+      <section className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
             <input
               type="text"
-              placeholder="Customer, phone, comment, branch..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+              onKeyDown={
+                handleSearchKeyDown
+              }
+              placeholder="Search customer, phone, comment or location..."
+              className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
             />
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Rating
-            </label>
+          <div className="flex flex-col gap-3 sm:flex-row">
             <select
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               value={rating}
-              onChange={(e) => setRating(e.target.value)}
+              onChange={(e) =>
+                handleRatingChange(
+                  e.target
+                    .value as RatingFilter
+                )
+              }
+              className="min-w-[160px] rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
             >
-              <option value="all">All Ratings</option>
-              <option value="5">5 Stars</option>
-              <option value="4">4 Stars</option>
-              <option value="3">3 Stars</option>
-              <option value="2">2 Stars</option>
-              <option value="1">1 Star</option>
-            </select>
-          </div>
+              <option value="all">
+                All ratings
+              </option>
 
-          <div className="flex items-end gap-2">
-            <Button className="w-full" onClick={loadAll}>
-              Search
-            </Button>
-            <Button
-              variant="secondary"
-              className="w-full"
-              onClick={() => {
-                setSearch("");
-                setRating("all");
-                setTimeout(() => loadAll(), 0);
-              }}
+              <option value="5">
+                5 stars
+              </option>
+
+              <option value="4">
+                4 stars
+              </option>
+
+              <option value="3">
+                3 stars
+              </option>
+
+              <option value="2">
+                2 stars
+              </option>
+
+              <option value="1">
+                1 star
+              </option>
+            </select>
+
+            <button
+              type="button"
+              onClick={handleSearch}
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Clear
-            </Button>
+              {refreshing ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+
+              Search
+            </button>
+
+            {(search ||
+              rating !== "all") && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                <X className="h-4 w-4" />
+                Clear
+              </button>
+            )}
           </div>
         </div>
-      </Card>
+      </section>
 
-      <Card>
+      {/* Reviews */}
+      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-5">
+          <div>
+            <h2 className="font-semibold text-gray-900">
+              Customer feedback
+            </h2>
+
+            <p className="mt-0.5 text-sm text-gray-500">
+              {reviews.length}{" "}
+              {reviews.length === 1
+                ? "review"
+                : "reviews"}{" "}
+              in this view
+            </p>
+          </div>
+
+          {refreshing && (
+            <div className="inline-flex items-center gap-2 text-xs text-gray-400">
+              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+              Updating
+            </div>
+          )}
+        </div>
+
         {reviews.length === 0 ? (
-          <div className="py-12 text-center text-gray-500">
-            No reviews found
+          <div className="px-6 py-16 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+              <Star className="h-5 w-5 text-gray-400" />
+            </div>
+
+            <h3 className="mt-4 text-sm font-medium text-gray-800">
+              No reviews found
+            </h3>
+
+            <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
+              {search ||
+              rating !== "all"
+                ? "Try changing or clearing your filters."
+                : "Customer reviews will appear here after completed bookings."}
+            </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="divide-y divide-gray-100">
             {reviews.map((review) => (
-              <div
+              <article
                 key={review.id}
-                className="rounded-xl border bg-white p-4 shadow-sm"
+                className="px-6 py-5"
               >
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-gray-900">
-                        {review.user_name || "Customer"}
-                      </p>
-                      <span className="text-sm text-yellow-600">
-                        {"★".repeat(review.rating)}
-                        <span className="text-gray-300">
-                          {"★".repeat(5 - review.rating)}
-                        </span>
-                      </span>
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  {/* Main */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                        <UserRound className="h-4 w-4 text-gray-500" />
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {review.user_name ||
+                            "Customer"}
+                        </p>
+
+                        {review.user_phone && (
+                          <p className="mt-0.5 text-xs text-gray-400">
+                            {
+                              review.user_phone
+                            }
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-0.5 sm:ml-2">
+                        {Array.from({
+                          length: 5,
+                        }).map((_, index) => {
+                          const active =
+                            index <
+                            review.rating;
+
+                          return (
+                            <Star
+                              key={index}
+                              className={`h-4 w-4 ${
+                                active
+                                  ? "text-amber-400"
+                                  : "text-gray-200"
+                              }`}
+                              fill="currentColor"
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    <p className="text-sm text-gray-500">
-                      {review.user_phone || "-"}
-                    </p>
-
                     {review.comment ? (
-                      <p className="mt-3 text-gray-700">
+                      <p className="mt-4 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-gray-700">
                         “{review.comment}”
                       </p>
                     ) : (
-                      <p className="mt-3 text-gray-400">
-                        No comment provided
+                      <p className="mt-4 text-sm italic text-gray-400">
+                        Rating submitted without a
+                        written comment.
                       </p>
                     )}
                   </div>
 
-                  <div className="text-sm text-gray-500 md:text-right">
-                    <p>{review.created_at ? formatDate(review.created_at) : "-"}</p>
-                    <p>{review.branch_name || "Branch"}</p>
-                    <p>AED {Number(review.total_aed || 0).toFixed(2)}</p>
+                  {/* Booking context */}
+                  <div className="grid min-w-[230px] gap-3 text-sm sm:grid-cols-2 lg:grid-cols-1">
+                    <MetaItem
+                      icon={
+                        <CalendarDays className="h-4 w-4" />
+                      }
+                      label="Reviewed"
+                      value={
+                        review.created_at
+                          ? formatDate(
+                              review.created_at
+                            )
+                          : "-"
+                      }
+                    />
+
+                    {review.scheduled_at && (
+                      <MetaItem
+                        icon={
+                          <CalendarDays className="h-4 w-4" />
+                        }
+                        label="Appointment"
+                        value={formatDate(
+                          review.scheduled_at
+                        )}
+                      />
+                    )}
+
+                    <MetaItem
+                      icon={
+                        <MapPin className="h-4 w-4" />
+                      }
+                      label="Location"
+                      value={
+                        review.branch_name ||
+                        "Not available"
+                      }
+                    />
+
+                    <MetaItem
+                      label="Booking total"
+                      value={formatMoney(
+                        review.total_aed
+                      )}
+                    />
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
-      </Card>
+      </section>
     </div>
   );
 }
 
-function StatCard({
-  title,
+function SummaryCard({
+  label,
   value,
-  color = "text-gray-900",
+  icon,
+  footer,
 }: {
-  title: string;
-  value: number | string;
-  color?: string;
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  footer: string;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm">
-      <div className="text-xs text-gray-600">{title}</div>
-      <div className={`mt-1 text-2xl font-bold ${color}`}>{value}</div>
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs text-gray-500">
+            {label}
+          </p>
+
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">
+            {value}
+          </p>
+
+          <p className="mt-1 text-xs text-gray-400">
+            {footer}
+          </p>
+        </div>
+
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+          {icon}
+        </div>
+      </div>
     </div>
   );
+}
+
+function MetaItem({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-xs text-gray-400">
+        {icon}
+        {label}
+      </div>
+
+      <p className="mt-1 text-sm font-medium text-gray-700">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function formatMoney(
+  value: number | string | null | undefined
+) {
+  return `AED ${Number(value || 0).toFixed(
+    2
+  )}`;
 }
