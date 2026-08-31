@@ -4,6 +4,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  ArrowLeft,
+  AlertCircle,
+  ImageIcon,
+  Info,
+  Plus,
+  X,
+} from "lucide-react";
+
 import { categoryApi, serviceApi } from "@/lib/api";
 
 type CategoryRow = {
@@ -32,7 +41,9 @@ export default function CreateServicePage() {
     async function loadCategories() {
       try {
         setLoadingCats(true);
+
         const res = await categoryApi.getAll();
+
         setCategories(Array.isArray(res.data) ? res.data : []);
       } catch (e: any) {
         setError(e?.message || "Failed to load categories");
@@ -46,7 +57,9 @@ export default function CreateServicePage() {
 
   useEffect(() => {
     return () => {
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
     };
   }, [imagePreview]);
 
@@ -54,13 +67,17 @@ export default function CreateServicePage() {
     setError(null);
 
     if (!file) {
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+
       setImageFile(null);
       setImagePreview(null);
       return;
     }
 
     const allowed = ["image/jpeg", "image/png", "image/webp"];
+
     if (!allowed.includes(file.type)) {
       setError("Only JPG, PNG, or WEBP images are allowed");
       return;
@@ -71,7 +88,9 @@ export default function CreateServicePage() {
       return;
     }
 
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
 
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
@@ -82,7 +101,7 @@ export default function CreateServicePage() {
     setError(null);
 
     if (name.trim().length < 2) {
-      setError("Service name is too short");
+      setError("Please enter a valid service name");
       return;
     }
 
@@ -109,10 +128,11 @@ export default function CreateServicePage() {
       if (imageFile) {
         const formData = new FormData();
         formData.append("file", imageFile);
+
         await serviceApi.uploadImage(serviceId, formData);
       }
 
-      router.push("/salon/services");
+      router.push(`/salon/services/${serviceId}/availability`);
       router.refresh();
     } catch (e: any) {
       setError(e?.message || "Failed to create service");
@@ -122,201 +142,248 @@ export default function CreateServicePage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-4xl space-y-7 p-6 lg:p-8">
+      {/* Header */}
+      <div>
         <Link
           href="/salon/services"
-          className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800"
         >
-          ← Back to services
+          <ArrowLeft className="h-4 w-4" />
+          Back to services
         </Link>
 
-        <div className="mb-8">
-          <h1 className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-3xl font-bold text-transparent">
-            Add Service
+        <div className="mt-5">
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+            Add service
           </h1>
-          <p className="mt-2 text-sm text-gray-500">
-            Create a new service for your salon
+
+          <p className="mt-1.5 text-sm text-gray-500">
+            Create a service customers can discover and book through Glowee.
           </p>
         </div>
+      </div>
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
-            <div className="flex items-center gap-3">
-              <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span className="font-medium text-red-700">{error}</span>
-            </div>
+      {/* Error */}
+      {error && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+
+          <div>
+            <p className="text-sm font-medium text-red-800">
+              Something went wrong
+            </p>
+            <p className="mt-0.5 text-sm text-red-600">{error}</p>
           </div>
-        )}
+        </div>
+      )}
 
-        <form onSubmit={onSubmit} className="space-y-6">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-6 flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
-                <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-xl font-bold text-gray-900">Basic Information</h2>
+      <form onSubmit={onSubmit} className="space-y-6">
+        {/* Main form */}
+        <section className="rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Service details
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Add the basic information customers will see.
+            </p>
+          </div>
+
+          <div className="space-y-6 p-6">
+            {/* Name */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Service name <span className="text-red-500">*</span>
+              </label>
+
+              <input
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setError(null);
+                }}
+                placeholder="e.g. Hair Cut"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+              />
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  Service Name *
-                </label>
-                <input
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="e.g. Hair Cut"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">
+            {/* Category */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">
                   Category
                 </label>
-                <select
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-                  disabled={loadingCats}
+
+                <Link
+                  href="/salon/categories"
+                  className="text-xs font-medium text-primary-600 hover:text-primary-700"
                 >
-                  <option value="">No category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                {loadingCats && (
-                  <p className="mt-2 text-xs text-gray-500">Loading categories...</p>
-                )}
+                  Manage categories
+                </Link>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Short description..."
-                  rows={4}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                disabled={loadingCats}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">No category</option>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  Service Image
-                </label>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
 
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) => handleImageChange(e.target.files?.[0] || null)}
-                  className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-all file:mr-4 file:rounded-lg file:border-0 file:bg-purple-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-purple-700 hover:file:bg-purple-100 focus:border-transparent focus:ring-2 focus:ring-purple-500"
-                />
-
-                <p className="mt-2 text-xs text-gray-500">
-                  Upload JPG, PNG, or WEBP. Max size 6MB.
+              {loadingCats && (
+                <p className="mt-2 text-xs text-gray-400">
+                  Loading categories...
                 </p>
+              )}
+            </div>
 
-                {imagePreview && (
-                  <div className="mt-4">
-                    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="h-48 w-full rounded-xl object-cover"
-                      />
-                    </div>
+            {/* Description */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Description
+              </label>
+
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Tell customers what this service includes..."
+                rows={4}
+                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+
+            {/* Image */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Service image
+              </label>
+
+              {!imagePreview ? (
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center transition hover:border-primary-300 hover:bg-primary-50/30">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm">
+                    <ImageIcon className="h-5 w-5" />
+                  </div>
+
+                  <p className="mt-3 text-sm font-medium text-gray-700">
+                    Upload service image
+                  </p>
+
+                  <p className="mt-1 text-xs text-gray-400">
+                    JPG, PNG or WEBP up to 6MB
+                  </p>
+
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) =>
+                      handleImageChange(e.target.files?.[0] || null)
+                    }
+                    className="hidden"
+                  />
+                </label>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-gray-200">
+                  <div className="relative h-64 bg-gray-50">
+                    <img
+                      src={imagePreview}
+                      alt="Service preview"
+                      className="h-full w-full object-cover"
+                    />
 
                     <button
                       type="button"
                       onClick={() => handleImageChange(null)}
-                      className="mt-3 text-sm font-semibold text-red-600 hover:text-red-700"
+                      className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-gray-500 shadow-sm transition hover:text-red-600"
+                      aria-label="Remove image"
                     >
-                      Remove image
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
-                )}
-              </div>
-
-              <div>
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-green-200 bg-green-50 p-4 transition-colors hover:bg-green-100">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    className="h-5 w-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                  />
-                  <div>
-                    <span className="font-semibold text-green-900">Active</span>
-                    <p className="mt-1 text-xs text-green-700">
-                      Service will be visible and available for setup
-                    </p>
-                  </div>
-                </label>
-              </div>
+                </div>
+              )}
             </div>
           </div>
+        </section>
 
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
-            <div className="flex items-start gap-3">
-              <svg className="mt-0.5 h-6 w-6 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <div>
-                <h3 className="mb-1 font-bold text-blue-900">Next Step</h3>
-                <p className="text-sm text-blue-700">
-                  After creating the service, you can set availability, pricing, and duration for each branch.
-                </p>
-              </div>
+        {/* Status */}
+        <section className="rounded-2xl border border-gray-200 bg-white px-6 py-5">
+          <div className="flex items-center justify-between gap-6">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">
+                Service status
+              </h2>
+
+              <p className="mt-1 text-sm text-gray-500">
+                {isActive
+                  ? "This service will be active after its booking setup is completed."
+                  : "This service will remain hidden from customers."}
+              </p>
             </div>
-          </div>
 
-          <div className="flex gap-4">
             <button
               type="button"
-              onClick={() => router.push("/salon/services")}
-              className="flex-1 rounded-xl border border-gray-300 bg-white px-6 py-3.5 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+              role="switch"
+              aria-checked={isActive}
+              onClick={() => setIsActive((value) => !value)}
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition ${
+                isActive ? "bg-primary-600" : "bg-gray-300"
+              }`}
             >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3.5 font-semibold text-white shadow-lg transition-all hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? "Creating..." : "Create Service"}
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition ${
+                  isActive
+                    ? "translate-x-[22px] translate-y-0.5"
+                    : "translate-x-0.5 translate-y-0.5"
+                }`}
+              />
             </button>
           </div>
-        </form>
-      </div>
+        </section>
+
+        {/* Next step */}
+        <div className="flex items-start gap-3 rounded-xl border border-primary-100 bg-primary-50/50 px-4 py-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
+
+          <p className="text-sm leading-6 text-gray-600">
+            After creating the service, you&apos;ll set its{" "}
+            <span className="font-medium text-gray-800">
+              price, duration and availability
+            </span>
+            .
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => router.push("/salon/services")}
+            disabled={saving}
+            className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+
+            {saving ? "Creating service..." : "Create & continue"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
