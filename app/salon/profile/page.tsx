@@ -2,8 +2,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { salonProfileApi, authApi } from "@/lib/api";
+import {
+  AlertCircle,
+  Camera,
+  CheckCircle2,
+  ImageIcon,
+  Lock,
+  Mail,
+  Phone,
+  Save,
+  Store,
+  Upload,
+  X,
+} from "lucide-react";
+
+import {
+  authApi,
+  salonProfileApi,
+} from "@/lib/api";
+
 import { getImageUrl } from "@/lib/utils";
 
 type Salon = {
@@ -16,106 +33,79 @@ type Salon = {
   email?: string | null;
 };
 
-function Input({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-  disabled = false,
-}: {
-  label: string;
-  value?: string | null;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="block">
-      <div className="mb-2 text-sm font-semibold text-gray-700">{label}</div>
-      <input
-        type={type}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
-      />
-    </label>
-  );
-}
-
-function Textarea({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value?: string | null;
-  onChange: (value: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <div className="mb-2 text-sm font-semibold text-gray-700">{label}</div>
-      <textarea
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={5}
-        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-      />
-    </label>
-  );
-}
-
 export default function SalonProfilePage() {
-  const router = useRouter();
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
 
-  const [salon, setSalon] = useState<Salon | null>(null);
-  const [err, setErr] = useState("");
-  const [success, setSuccess] = useState("");
+  const [uploadingLogo, setUploadingLogo] =
+    useState(false);
 
-  // Password change state
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [uploadingCover, setUploadingCover] =
+    useState(false);
+
+  const [changingPassword, setChangingPassword] =
+    useState(false);
+
+  const [salon, setSalon] = useState<Salon | null>(
+    null
+  );
+
+  const [err, setErr] = useState<string | null>(null);
+  const [success, setSuccess] =
+    useState<string | null>(null);
+
+  const [showPasswordModal, setShowPasswordModal] =
+    useState(false);
+
+  const [currentPassword, setCurrentPassword] =
+    useState("");
+
+  const [newPassword, setNewPassword] =
+    useState("");
+
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
 
   useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        setErr(null);
+        setSuccess(null);
+
+        const json = await salonProfileApi.get();
+
+        setSalon(json?.salon ?? null);
+      } catch (e: any) {
+        setErr(
+          e?.message ?? "Failed to load profile"
+        );
+
+        setSalon(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
     load();
   }, []);
 
-  async function load() {
-    try {
-      setLoading(true);
-      setErr("");
-      setSuccess("");
-
-      const json = await salonProfileApi.get();
-      setSalon(json?.salon ?? null);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to load profile");
-      setSalon(null);
-    } finally {
-      setLoading(false);
+  function validateProfile() {
+    if (!salon) {
+      return "Business data is missing";
     }
-  }
 
-  function validate() {
-    if (!salon) return "Salon data is missing";
-    if (!salon.name?.trim()) return "Salon name is required";
+    if (!salon.name?.trim()) {
+      return "Business name is required";
+    }
 
-    if (salon.email && !salon.email.includes("@")) {
-      return "Please enter a valid email";
+    if (
+      salon.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        salon.email
+      )
+    ) {
+      return "Please enter a valid email address";
     }
 
     return "";
@@ -124,17 +114,18 @@ export default function SalonProfilePage() {
   async function save() {
     if (!salon) return;
 
-    const validationError = validate();
+    const validationError = validateProfile();
+
     if (validationError) {
       setErr(validationError);
-      setSuccess("");
+      setSuccess(null);
       return;
     }
 
     try {
       setSaving(true);
-      setErr("");
-      setSuccess("");
+      setErr(null);
+      setSuccess(null);
 
       const payload = {
         name: salon.name.trim(),
@@ -143,77 +134,128 @@ export default function SalonProfilePage() {
         about: salon.about?.trim() || null,
       };
 
-      const json = await salonProfileApi.update(payload);
+      const json =
+        await salonProfileApi.update(payload);
+
       setSalon(json?.salon ?? salon);
-      setSuccess("Profile updated successfully");
+
+      setSuccess("Business profile updated.");
     } catch (e: any) {
-      setErr(e?.message ?? "Save failed");
-      setSuccess("");
+      setErr(e?.message ?? "Failed to save profile");
     } finally {
       setSaving(false);
     }
   }
 
+  function closePasswordModal() {
+    setShowPasswordModal(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  }
+
   async function handlePasswordChange() {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setErr("Please fill all password fields");
+    setErr(null);
+    setSuccess(null);
+
+    if (
+      !currentPassword ||
+      !newPassword ||
+      !confirmPassword
+    ) {
+      setErr("Please fill in all password fields");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setErr("New passwords don't match");
+      setErr("New passwords do not match");
       return;
     }
 
     if (newPassword.length < 6) {
-      setErr("Password must be at least 6 characters");
+      setErr(
+        "Password must be at least 6 characters"
+      );
       return;
     }
 
     try {
       setChangingPassword(true);
-      setErr("");
-      setSuccess("");
 
-      await authApi.changePassword(currentPassword, newPassword);
-      
-      setSuccess("Password changed successfully");
-      setShowPasswordModal(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      await authApi.changePassword(
+        currentPassword,
+        newPassword
+      );
+
+      closePasswordModal();
+
+      setSuccess("Password changed successfully.");
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to change password");
+      setErr(
+        e?.message ?? "Failed to change password"
+      );
     } finally {
       setChangingPassword(false);
     }
   }
 
+  function validateImage(file: File) {
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      return "Please upload a JPG, PNG or WEBP image";
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return "Image must be less than 5MB";
+    }
+
+    return "";
+  }
+
   async function handleLogoUpload(file: File) {
     if (!salon) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErr("Logo must be less than 5MB");
+    const validationError = validateImage(file);
+
+    if (validationError) {
+      setErr(validationError);
+      setSuccess(null);
       return;
     }
+
     try {
       setUploadingLogo(true);
-      setErr("");
-      setSuccess("");
+      setErr(null);
+      setSuccess(null);
 
       const formData = new FormData();
       formData.append("file", file);
 
-      const json = await salonProfileApi.uploadLogo(formData);
+      const json =
+        await salonProfileApi.uploadLogo(formData);
 
       setSalon((prev) =>
-        prev ? { ...prev, logo_url: json?.logo_url || json?.salon?.logo_url || prev.logo_url } : prev
+        prev
+          ? {
+              ...prev,
+              logo_url:
+                json?.logo_url ||
+                json?.salon?.logo_url ||
+                prev.logo_url,
+            }
+          : prev
       );
 
-      setSuccess("Logo uploaded successfully");
+      setSuccess("Logo updated.");
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to upload logo");
-      setSuccess("");
+      setErr(
+        e?.message ?? "Failed to upload logo"
+      );
     } finally {
       setUploadingLogo(false);
     }
@@ -222,28 +264,43 @@ export default function SalonProfilePage() {
   async function handleCoverUpload(file: File) {
     if (!salon) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErr("Cover must be less than 5MB");
+    const validationError = validateImage(file);
+
+    if (validationError) {
+      setErr(validationError);
+      setSuccess(null);
       return;
     }
+
     try {
       setUploadingCover(true);
-      setErr("");
-      setSuccess("");
+      setErr(null);
+      setSuccess(null);
 
       const formData = new FormData();
       formData.append("file", file);
 
-      const json = await salonProfileApi.uploadCover(formData);
+      const json =
+        await salonProfileApi.uploadCover(formData);
 
       setSalon((prev) =>
-        prev ? { ...prev, cover_url: json?.cover_url || json?.salon?.cover_url || prev.cover_url } : prev
+        prev
+          ? {
+              ...prev,
+              cover_url:
+                json?.cover_url ||
+                json?.salon?.cover_url ||
+                prev.cover_url,
+            }
+          : prev
       );
 
-      setSuccess("Cover uploaded successfully");
+      setSuccess("Cover image updated.");
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to upload cover");
-      setSuccess("");
+      setErr(
+        e?.message ??
+          "Failed to upload cover image"
+      );
     } finally {
       setUploadingCover(false);
     }
@@ -251,10 +308,13 @@ export default function SalonProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex min-h-[420px] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-          <p className="mt-4 text-gray-600">Loading profile...</p>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+
+          <p className="mt-4 text-sm text-gray-500">
+            Loading profile...
+          </p>
         </div>
       </div>
     );
@@ -262,14 +322,22 @@ export default function SalonProfilePage() {
 
   if (!salon) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-        <div className="text-xl font-bold text-gray-900">Salon not found</div>
-        {err ? <div className="mt-2 text-sm text-red-600">{err}</div> : null}
+      <div className="mx-auto max-w-2xl p-6">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+          <AlertCircle className="mx-auto h-6 w-6 text-red-500" />
 
-        <div className="mt-4">
+          <h1 className="mt-3 text-lg font-semibold text-red-800">
+            Business profile unavailable
+          </h1>
+
+          <p className="mt-1 text-sm text-red-600">
+            {err || "Profile could not be loaded"}
+          </p>
+
           <button
-            onClick={load}
-            className="bg-purple-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-purple-700 transition-colors"
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-5 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
           >
             Retry
           </button>
@@ -282,324 +350,581 @@ export default function SalonProfilePage() {
   const logoSrc = getImageUrl(salon.logo_url);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto max-w-6xl space-y-7 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Salon Profile
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+            Business profile
           </h1>
-          <p className="mt-2 text-sm text-gray-500">
-            Manage your salon information and settings
+
+          <p className="mt-1.5 max-w-2xl text-sm text-gray-500">
+            Manage the information and branding customers
+            see on Glowee.
           </p>
-
-          {err ? (
-            <div className="mt-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm font-medium text-red-600">
-              {err}
-            </div>
-          ) : null}
-
-          {success ? (
-            <div className="mt-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm font-medium text-green-600">
-              {success}
-            </div>
-          ) : null}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => setShowPasswordModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+            type="button"
+            onClick={() => {
+              setErr(null);
+              setSuccess(null);
+              setShowPasswordModal(true);
+            }}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            Change Password
+            <Lock className="h-4 w-4" />
+            Change password
           </button>
+
           <button
+            type="button"
             onClick={save}
-            disabled={saving || !salon.name?.trim()}
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={
+              saving || !salon.name?.trim()
+            }
+            className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? (
               <>
-                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                 Saving...
               </>
             ) : (
               <>
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Save Changes
+                <Save className="h-4 w-4" />
+                Save changes
               </>
             )}
           </button>
         </div>
       </div>
 
-      {/* Profile Preview Card */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        {/* Cover Image */}
-        <div className="relative h-64 bg-gradient-to-br from-purple-100 to-pink-100">
+      {/* Messages */}
+      {err && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+
+          <div>
+            <p className="text-sm font-medium text-red-800">
+              Something went wrong
+            </p>
+
+            <p className="mt-0.5 text-sm text-red-600">
+              {err}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {success && (
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+
+          <p className="text-sm font-medium text-emerald-700">
+            {success}
+          </p>
+        </div>
+      )}
+
+      {/* Profile preview */}
+      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <div className="relative h-56 bg-gray-100 sm:h-64">
           {coverSrc ? (
-            <img src={coverSrc} alt="cover" className="h-full w-full object-cover" />
+            <img
+              src={coverSrc}
+              alt={`${salon.name} cover`}
+              className="h-full w-full object-cover"
+            />
           ) : (
-            <div className="flex h-full w-full items-center justify-center">
+            <div className="flex h-full items-center justify-center">
               <div className="text-center">
-                <svg className="w-16 h-16 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-gray-400 font-medium">No cover image</p>
+                <ImageIcon className="mx-auto h-7 w-7 text-gray-300" />
+
+                <p className="mt-2 text-sm text-gray-400">
+                  No cover image
+                </p>
               </div>
             </div>
           )}
 
+          <label className="absolute right-4 top-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white/95 px-3 py-2 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-black/5 transition hover:bg-white">
+            {uploadingCover ? (
+              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-700" />
+            ) : (
+              <Camera className="h-3.5 w-3.5" />
+            )}
+
+            {uploadingCover
+              ? "Uploading..."
+              : coverSrc
+              ? "Change cover"
+              : "Add cover"}
+
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              disabled={uploadingCover}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+
+                if (file) {
+                  handleCoverUpload(file);
+                }
+
+                e.currentTarget.value = "";
+              }}
+            />
+          </label>
+        </div>
+
+        <div className="relative px-6 pb-6 pt-16 sm:px-8">
           {/* Logo */}
-          <div className="absolute -bottom-16 left-8">
-            <div className="w-32 h-32 rounded-2xl border-4 border-white bg-white shadow-xl overflow-hidden">
+          <div className="absolute -top-14 left-6 sm:left-8">
+            <div className="relative h-28 w-28 overflow-hidden rounded-2xl border-4 border-white bg-white shadow-sm">
               {logoSrc ? (
-                <img src={logoSrc} alt="logo" className="h-full w-full object-cover" />
+                <img
+                  src={logoSrc}
+                  alt={`${salon.name} logo`}
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500">
-                  <span className="text-5xl font-bold text-white">
-                    {salon.name?.slice(0, 1)?.toUpperCase() || "S"}
+                <div className="flex h-full w-full items-center justify-center bg-primary-50">
+                  <span className="text-3xl font-semibold text-primary-600">
+                    {salon.name
+                      ?.slice(0, 1)
+                      ?.toUpperCase() || "B"}
                   </span>
                 </div>
               )}
+
+              {uploadingLogo && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+                </div>
+              )}
             </div>
-          </div>
-        </div>
 
-        {/* Profile Info */}
-        <div className="px-8 pt-20 pb-8">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">{salon.name}</h2>
-              <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
-                {salon.phone && (
-                  <div className="flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
-                    {salon.phone}
-                  </div>
-                )}
-                {salon.email && (
-                  <div className="flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    {salon.email}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+            <label className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white text-gray-600 shadow-sm ring-1 ring-gray-200 transition hover:bg-gray-50">
+              <Camera className="h-3.5 w-3.5" />
 
-          {salon.about && (
-            <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-              <p className="text-sm text-gray-700 leading-relaxed">{salon.about}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Edit Form */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-bold text-gray-900">Edit Information</h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Input
-            label="Salon Name *"
-            value={salon.name}
-            onChange={(v) => setSalon({ ...salon, name: v })}
-            placeholder="Enter salon name"
-          />
-
-          <Input
-            label="Phone Number"
-            value={salon.phone}
-            onChange={(v) => setSalon({ ...salon, phone: v })}
-            placeholder="+971 50 123 4567"
-            type="tel"
-          />
-
-          <div className="md:col-span-2">
-            <Input
-              label="Email Address"
-              value={salon.email}
-              onChange={(v) => setSalon({ ...salon, email: v })}
-              placeholder="salon@example.com"
-              type="email"
-              disabled={true}
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Email is used for login and cannot be changed here
-            </p>
-          </div>
-
-          <div className="md:col-span-2">
-            <Textarea
-              label="About Your Salon"
-              value={salon.about}
-              onChange={(v) => setSalon({ ...salon, about: v })}
-              placeholder="Tell customers about your salon, services, and what makes you special..."
-            />
-          </div>
-
-          {/* Logo Upload */}
-          <div>
-            <div className="mb-2 text-sm font-semibold text-gray-700">Logo Image</div>
-            <label className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-6 cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all">
-              <svg className="w-10 h-10 text-gray-400 group-hover:text-purple-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <span className="text-sm font-medium text-gray-600 group-hover:text-purple-600">
-                {uploadingLogo ? "Uploading..." : "Upload Logo"}
-              </span>
-              <span className="text-xs text-gray-400 mt-1">PNG, JPG up to 5MB</span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/jpg,image/webp"
-                className="hidden"
-                disabled={uploadingLogo}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleLogoUpload(file);
-                  e.currentTarget.value = "";
-                }}
-              />
-            </label>
-            {logoSrc && (
-              <div className="mt-3">
-                <img
-                  src={logoSrc}
-                  alt="Logo preview"
-                  className="w-24 h-24 rounded-xl object-cover border-2 border-gray-200"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Cover Upload */}
-          <div>
-            <div className="mb-2 text-sm font-semibold text-gray-700">Cover Image</div>
-            <label className="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-6 cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all">
-              <svg className="w-10 h-10 text-gray-400 group-hover:text-purple-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm font-medium text-gray-600 group-hover:text-purple-600">
-                {uploadingCover ? "Uploading..." : "Upload Cover"}
-              </span>
-              <span className="text-xs text-gray-400 mt-1">PNG, JPG up to 5MB</span>
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 className="hidden"
-                disabled={uploadingCover}
+                disabled={uploadingLogo}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) handleCoverUpload(file);
+
+                  if (file) {
+                    handleLogoUpload(file);
+                  }
+
                   e.currentTarget.value = "";
                 }}
               />
             </label>
-            {coverSrc && (
-              <div className="mt-3">
+          </div>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {salon.name}
+              </h2>
+
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500">
+                {salon.phone && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Phone className="h-4 w-4 text-gray-400" />
+                    {salon.phone}
+                  </span>
+                )}
+
+                {salon.email && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Mail className="h-4 w-4 text-gray-400" />
+                    {salon.email}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {salon.about ? (
+            <p className="mt-5 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-gray-600">
+              {salon.about}
+            </p>
+          ) : (
+            <p className="mt-5 text-sm text-gray-400">
+              No business description added yet.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Business information */}
+      <section className="rounded-2xl border border-gray-200 bg-white">
+        <SectionHeader
+          icon={<Store className="h-5 w-5" />}
+          title="Business information"
+          description="Update the main customer-facing details for your business."
+        />
+
+        <div className="grid gap-5 p-6 md:grid-cols-2">
+          <Field
+            label="Business name"
+            required
+          >
+            <input
+              value={salon.name}
+              onChange={(e) =>
+                setSalon({
+                  ...salon,
+                  name: e.target.value,
+                })
+              }
+              placeholder="Business name"
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+            />
+          </Field>
+
+          <Field label="Phone">
+            <div className="relative">
+              <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+              <input
+                type="tel"
+                value={salon.phone ?? ""}
+                onChange={(e) =>
+                  setSalon({
+                    ...salon,
+                    phone: e.target.value,
+                  })
+                }
+                placeholder="+971..."
+                className="w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+          </Field>
+
+          <div className="md:col-span-2">
+            <Field
+              label="Email"
+              hint="This email is used for login and cannot be changed here."
+            >
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+                <input
+                  type="email"
+                  value={salon.email ?? ""}
+                  disabled
+                  className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 pl-10 pr-4 text-sm text-gray-500 outline-none"
+                />
+              </div>
+            </Field>
+          </div>
+
+          <div className="md:col-span-2">
+            <Field
+              label="About"
+              hint="Tell customers what makes your business special."
+            >
+              <textarea
+                value={salon.about ?? ""}
+                onChange={(e) =>
+                  setSalon({
+                    ...salon,
+                    about: e.target.value,
+                  })
+                }
+                placeholder="Tell customers about your business, services and experience..."
+                rows={5}
+                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm leading-6 text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+              />
+            </Field>
+          </div>
+        </div>
+      </section>
+
+      {/* Branding */}
+      <section className="rounded-2xl border border-gray-200 bg-white">
+        <SectionHeader
+          icon={<ImageIcon className="h-5 w-5" />}
+          title="Branding"
+          description="Manage the logo and cover image shown to Glowee customers."
+        />
+
+        <div className="grid gap-6 p-6 md:grid-cols-2">
+          <UploadCard
+            title="Logo"
+            description="Square images work best."
+            preview={
+              logoSrc ? (
+                <img
+                  src={logoSrc}
+                  alt="Logo preview"
+                  className="h-20 w-20 rounded-xl border border-gray-200 object-cover"
+                />
+              ) : null
+            }
+            uploading={uploadingLogo}
+            onFile={handleLogoUpload}
+          />
+
+          <UploadCard
+            title="Cover image"
+            description="Use a wide image that represents your business."
+            preview={
+              coverSrc ? (
                 <img
                   src={coverSrc}
                   alt="Cover preview"
-                  className="w-full h-32 rounded-xl object-cover border-2 border-gray-200"
+                  className="h-20 w-32 rounded-xl border border-gray-200 object-cover"
                 />
-              </div>
-            )}
-          </div>
+              ) : null
+            }
+            uploading={uploadingCover}
+            onFile={handleCoverUpload}
+          />
         </div>
-      </div>
+      </section>
 
-      {/* Password Change Modal */}
+      {/* Password modal */}
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Change Password</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Change password
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Enter your current password before setting a new one.
+                </p>
+              </div>
+
               <button
-                onClick={() => {
-                  setShowPasswordModal(false);
-                  setCurrentPassword("");
-                  setNewPassword("");
-                  setConfirmPassword("");
-                  setErr("");
-                }}
-                className="text-gray-400 hover:text-gray-600"
+                type="button"
+                onClick={closePasswordModal}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <Input
-                label="Current Password"
-                type="password"
+            <div className="space-y-5 p-6">
+              <PasswordField
+                label="Current password"
                 value={currentPassword}
                 onChange={setCurrentPassword}
                 placeholder="Enter current password"
               />
 
-              <Input
-                label="New Password"
-                type="password"
+              <PasswordField
+                label="New password"
                 value={newPassword}
                 onChange={setNewPassword}
-                placeholder="Enter new password (min 6 characters)"
+                placeholder="At least 6 characters"
               />
 
-              <Input
-                label="Confirm New Password"
-                type="password"
+              <PasswordField
+                label="Confirm new password"
                 value={confirmPassword}
                 onChange={setConfirmPassword}
-                placeholder="Confirm new password"
+                placeholder="Enter new password again"
               />
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:justify-end">
                 <button
-                  onClick={() => {
-                    setShowPasswordModal(false);
-                    setCurrentPassword("");
-                    setNewPassword("");
-                    setConfirmPassword("");
-                    setErr("");
-                  }}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  type="button"
+                  onClick={closePasswordModal}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
                   Cancel
                 </button>
+
                 <button
+                  type="button"
                   onClick={handlePasswordChange}
                   disabled={changingPassword}
-                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {changingPassword ? "Changing..." : "Change Password"}
+                  {changingPassword ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                      Changing...
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4" />
+                      Change password
+                    </>
+                  )}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="border-b border-gray-100 px-6 py-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+          {icon}
+        </div>
+
+        <div>
+          <h2 className="font-semibold text-gray-900">
+            {title}
+          </h2>
+
+          <p className="mt-0.5 text-sm text-gray-500">
+            {description}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  required = false,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-gray-700">
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-500">*</span>
+        )}
+      </label>
+
+      {children}
+
+      {hint && (
+        <p className="mt-1.5 text-xs text-gray-400">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function UploadCard({
+  title,
+  description,
+  preview,
+  uploading,
+  onFile,
+}: {
+  title: string;
+  description: string;
+  preview: React.ReactNode;
+  uploading: boolean;
+  onFile: (file: File) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-medium text-gray-900">
+            {title}
+          </h3>
+
+          <p className="mt-1 text-xs text-gray-500">
+            {description}
+          </p>
+        </div>
+
+        {preview}
+      </div>
+
+      <label className="mt-5 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700">
+        {uploading ? (
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-primary-600" />
+        ) : (
+          <Upload className="h-4 w-4" />
+        )}
+
+        {uploading ? "Uploading..." : `Upload ${title.toLowerCase()}`}
+
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          disabled={uploading}
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+
+            if (file) {
+              onFile(file);
+            }
+
+            e.currentTarget.value = "";
+          }}
+        />
+      </label>
+
+      <p className="mt-2 text-xs text-gray-400">
+        JPG, PNG or WEBP · Maximum 5MB
+      </p>
+    </div>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+
+      <input
+        type="password"
+        value={value}
+        onChange={(e) =>
+          onChange(e.target.value)
+        }
+        placeholder={placeholder}
+        autoComplete="new-password"
+        className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+      />
     </div>
   );
 }
