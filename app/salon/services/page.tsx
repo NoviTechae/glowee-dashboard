@@ -3,6 +3,19 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Search,
+  Plus,
+  Tags,
+  Sparkles,
+  ImageIcon,
+  Clock3,
+  Pencil,
+  Trash2,
+  ArrowRight,
+  AlertCircle,
+} from "lucide-react";
+
 import { categoryApi, serviceApi } from "@/lib/api";
 
 type CategoryRow = {
@@ -44,7 +57,7 @@ export default function SalonServicesUnifiedPage() {
       setCategories(Array.isArray(resCats.data) ? resCats.data : []);
       setServices(Array.isArray(resSvcs.data) ? resSvcs.data : []);
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to load data");
+      setErr(e?.message ?? "Failed to load services");
       setCategories([]);
       setServices([]);
     } finally {
@@ -57,39 +70,56 @@ export default function SalonServicesUnifiedPage() {
   }, []);
 
   async function deleteService(id: string) {
-    if (!confirm("Delete this service?")) return;
+    if (
+      !confirm(
+        "Are you sure you want to delete this service? This action cannot be undone unless the service has booking history."
+      )
+    ) {
+      return;
+    }
 
     try {
       setErr(null);
+
       const res = await serviceApi.delete(id);
+
       await loadAll();
 
       if (res?.mode === "archived") {
-        alert("Service archived because it has booking history.");
+        alert(
+          "This service has booking history, so it was archived instead of permanently deleted."
+        );
       }
     } catch (e: any) {
-      setErr(e?.message ?? "Delete service failed");
+      setErr(e?.message ?? "Failed to delete service");
     }
   }
 
   const categoryMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of categories) m.set(c.id, c.name);
-    return m;
+    const map = new Map<string, string>();
+
+    for (const category of categories) {
+      map.set(category.id, category.name);
+    }
+
+    return map;
   }, [categories]);
 
   const filteredServices = useMemo(() => {
     const query = q.trim().toLowerCase();
+
     let data = [...services];
 
     if (query) {
-      data = data.filter((s) => (s.name ?? "").toLowerCase().includes(query));
+      data = data.filter((service) =>
+        (service.name ?? "").toLowerCase().includes(query)
+      );
     }
 
     if (catFilter === "uncategorized") {
-      data = data.filter((s) => !s.category_id);
+      data = data.filter((service) => !service.category_id);
     } else if (catFilter !== "all") {
-      data = data.filter((s) => s.category_id === catFilter);
+      data = data.filter((service) => service.category_id === catFilter);
     }
 
     data.sort((a, b) =>
@@ -102,184 +132,170 @@ export default function SalonServicesUnifiedPage() {
   const groupedServices = useMemo(() => {
     const map = new Map<string, ServiceRow[]>();
 
-    for (const s of filteredServices) {
-      const key = s.category_id ?? "uncategorized";
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(s);
+    for (const service of filteredServices) {
+      const key = service.category_id ?? "uncategorized";
+
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+
+      map.get(key)!.push(service);
     }
 
     return Array.from(map.entries()).sort((a, b) => {
       const aLabel =
-        a[0] === "uncategorized" ? "Uncategorized" : categoryMap.get(a[0]) ?? "";
+        a[0] === "uncategorized"
+          ? "Uncategorized"
+          : categoryMap.get(a[0]) ?? "";
+
       const bLabel =
-        b[0] === "uncategorized" ? "Uncategorized" : categoryMap.get(b[0]) ?? "";
+        b[0] === "uncategorized"
+          ? "Uncategorized"
+          : categoryMap.get(b[0]) ?? "";
+
       return aLabel.localeCompare(bLabel);
     });
   }, [filteredServices, categoryMap]);
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
+      <div className="flex min-h-[420px] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-purple-600"></div>
-          <p className="mt-4 text-gray-600">Loading services...</p>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+          <p className="mt-4 text-sm text-gray-500">Loading services...</p>
         </div>
       </div>
     );
   }
 
+  const hasFilters = q.trim() !== "" || catFilter !== "all";
+
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto max-w-[1500px] space-y-7 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-3xl font-bold text-transparent">
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
             Services
           </h1>
-          <p className="mt-2 text-sm text-gray-500">
-            Manage your salon services and organize them by category
+
+          <p className="mt-1.5 text-sm text-gray-500">
+            Manage the services customers can discover and book.
           </p>
         </div>
 
-        <div className="flex gap-3">
-          <button
-            onClick={loadAll}
-            className="flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/salon/categories"
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            Refresh
-          </button>
+            <Tags className="h-4 w-4" />
+            Manage categories
+          </Link>
 
           <Link
             href="/salon/services/create"
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-2.5 font-semibold text-white shadow-lg transition-all hover:shadow-xl"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Service
+            <Plus className="h-4 w-4" />
+            Add service
           </Link>
         </div>
       </div>
 
       {/* Error */}
       {err && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <div className="flex items-center gap-3">
-            <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium text-red-700">{err}</span>
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+
+          <div>
+            <p className="text-sm font-medium text-red-800">
+              Something went wrong
+            </p>
+            <p className="mt-0.5 text-sm text-red-600">{err}</p>
           </div>
         </div>
       )}
 
-      {/* Filters / Stats */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm lg:col-span-3">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Search
-              </label>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search service..."
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
+      {/* Search and filters */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Category
-              </label>
-              <select
-                value={catFilter}
-                onChange={(e) => setCatFilter(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="all">All categories</option>
-                <option value="uncategorized">Uncategorized</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
-              <div className="text-sm font-semibold text-purple-700">Results</div>
-              <div className="mt-1 text-2xl font-bold text-purple-900">
-                {filteredServices.length}
-              </div>
-            </div>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search services..."
+              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+            />
           </div>
-        </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
-              <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Total Services</div>
-              <div className="text-lg font-bold text-gray-900">{services.length}</div>
-            </div>
+          <select
+            value={catFilter}
+            onChange={(e) => setCatFilter(e.target.value)}
+            className="min-w-[190px] rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+          >
+            <option value="all">All categories</option>
+            <option value="uncategorized">Uncategorized</option>
+
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+
+          <div className="whitespace-nowrap px-2 text-sm text-gray-500">
+            {filteredServices.length}{" "}
+            {filteredServices.length === 1 ? "service" : "services"}
           </div>
         </div>
       </div>
 
-      {/* Empty */}
+      {/* Empty state */}
       {filteredServices.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-12 shadow-sm">
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
-              <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </div>
-            <h3 className="mb-2 text-lg font-semibold text-gray-900">No services found</h3>
-            <p className="mb-6 text-gray-500">
-              {services.length === 0
-                ? "Add your first service to get started"
-                : "Try changing your search or category filter"}
-            </p>
-            {services.length === 0 && (
-              <Link
-                href="/salon/services/create"
-                className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-purple-700"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Service
-              </Link>
-            )}
+        <div className="rounded-2xl border border-gray-200 bg-white px-6 py-14 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
+            <Sparkles className="h-5 w-5 text-primary-600" />
           </div>
+
+          <h2 className="mt-4 text-lg font-semibold text-gray-900">
+            {services.length === 0
+              ? "Add your first service"
+              : "No matching services"}
+          </h2>
+
+          <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+            {services.length === 0
+              ? "Create the services your customers can discover and book through Glowee."
+              : "Try changing your search or category filter."}
+          </p>
+
+          {services.length === 0 ? (
+            <Link
+              href="/salon/services/create"
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+            >
+              <Plus className="h-4 w-4" />
+              Add service
+            </Link>
+          ) : (
+            hasFilters && (
+              <button
+                onClick={() => {
+                  setQ("");
+                  setCatFilter("all");
+                }}
+                className="mt-5 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Clear filters
+              </button>
+            )
+          )}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {groupedServices.map(([catId, list]) => {
             const title =
               catId === "uncategorized"
@@ -287,45 +303,31 @@ export default function SalonServicesUnifiedPage() {
                 : categoryMap.get(catId) ?? "Category";
 
             return (
-              <div
-                key={catId}
-                className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
-              >
-                {/* Category Header */}
-                <div className="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500">
-                      <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                        />
-                      </svg>
-                    </div>
+              <section key={catId}>
+                {/* Category heading */}
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {title}
+                    </h2>
 
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-                      <p className="text-sm text-gray-500">
-                        {list.length} service{list.length !== 1 ? "s" : ""}
-                      </p>
-                    </div>
+                    <p className="mt-0.5 text-sm text-gray-400">
+                      {list.length} {list.length === 1 ? "service" : "services"}
+                    </p>
                   </div>
                 </div>
 
-                {/* Services in category */}
-                <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-2">
-                  {list.map((s) => (
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                  {list.map((service) => (
                     <ServiceCard
-                      key={s.id}
-                      s={s}
+                      key={service.id}
+                      service={service}
                       categoryMap={categoryMap}
                       onDelete={deleteService}
                     />
                   ))}
                 </div>
-              </div>
+              </section>
             );
           })}
         </div>
@@ -335,112 +337,93 @@ export default function SalonServicesUnifiedPage() {
 }
 
 function ServiceCard({
-  s,
+  service,
   categoryMap,
   onDelete,
 }: {
-  s: ServiceRow;
+  service: ServiceRow;
   categoryMap: Map<string, string>;
   onDelete: (id: string) => void;
 }) {
-  const categoryLabel = s.category_id
-    ? categoryMap.get(s.category_id) || "Unknown category"
+  const categoryLabel = service.category_id
+    ? categoryMap.get(service.category_id) || "Unknown category"
     : "Uncategorized";
 
   return (
-    <div className="group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:shadow-lg">
-      {/* Header */}
-      <div className="border-b border-gray-200 bg-gradient-to-br from-purple-50 to-pink-50 p-6">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              {s.image_url ? (
-                <img
-                  src={s.image_url}
-                  alt={s.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-xs font-bold text-gray-400">
-                  IMG
-                </div>
-              )}
+    <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:border-gray-300">
+      <div className="flex gap-4 p-5">
+        {/* Image */}
+        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+          {service.image_url ? (
+            <img
+              src={service.image_url}
+              alt={service.name}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <ImageIcon className="h-5 w-5 text-gray-300" />
             </div>
-
-            <div>
-              <h3 className="text-xl font-bold text-gray-900">{s.name}</h3>
-              <p className="mt-1 text-sm text-gray-600">{categoryLabel}</p>
-            </div>
-          </div>
-
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              s.is_active
-                ? "border border-green-200 bg-green-100 text-green-700"
-                : "border border-gray-200 bg-gray-100 text-gray-600"
-            }`}
-          >
-            {s.is_active ? "Active" : "Inactive"}
-          </span>
+          )}
         </div>
-      </div>
 
-      {/* Body */}
-      <div className="space-y-4 p-6">
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <svg className="h-4 w-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span className="text-xs font-semibold uppercase text-gray-500">
-              Description
+        {/* Details */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold text-gray-900">
+                {service.name}
+              </h3>
+
+              <p className="mt-1 text-sm text-gray-500">{categoryLabel}</p>
+            </div>
+
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                service.is_active
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {service.is_active ? "Active" : "Inactive"}
             </span>
           </div>
 
-          {s.description ? (
-            <p className="text-sm text-gray-600">{s.description}</p>
-          ) : (
-            <p className="text-sm italic text-gray-400">No description</p>
-          )}
+          <p className="mt-3 line-clamp-2 text-sm leading-6 text-gray-500">
+            {service.description || "No description added yet."}
+          </p>
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 bg-gray-50 px-6 py-4">
+      <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3.5">
         <Link
-          href={`/salon/services/${s.id}/availability`}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+          href={`/salon/services/${service.id}/availability`}
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-primary-600"
         >
+          <Clock3 className="h-4 w-4" />
           Availability
+          <ArrowRight className="h-3.5 w-3.5" />
         </Link>
 
-        <Link
-          href={`/salon/services/${s.id}/edit`}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-        >
-          Edit
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            href={`/salon/services/${service.id}/edit`}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+            title="Edit service"
+          >
+            <Pencil className="h-4 w-4" />
+          </Link>
 
-        <button
-          onClick={() => onDelete(s.id)}
-          className="flex items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3 py-2 font-semibold text-red-600 transition-colors hover:bg-red-100"
-          title="Delete service"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
-          </svg>
-        </button>
+          <button
+            onClick={() => onDelete(service.id)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+            title="Delete service"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }
