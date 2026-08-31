@@ -1,10 +1,30 @@
 // app/salon/bookings/block-time/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { blockedSlotsApi, branchApi, staffApi } from "@/lib/api";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Info,
+  Lock,
+  MapPin,
+  MessageSquareText,
+  Phone,
+  Plus,
+  Trash2,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
+
+import {
+  blockedSlotsApi,
+  branchApi,
+  staffApi,
+} from "@/lib/api";
 
 type Branch = {
   id: string;
@@ -31,54 +51,75 @@ type BlockedSlot = {
   customer_phone?: string | null;
 };
 
-export default function BlockTimeSlotsPage() {
-  const router = useRouter();
+function getLocalDateString() {
+  const date = new Date();
 
-  // Form state
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return "-";
+  return value.substring(0, 5);
+}
+
+export default function BlockTimeSlotsPage() {
   const [branchId, setBranchId] = useState("");
-  const [staffId, setStaffId] = useState(""); // empty = all staff
+  const [staffId, setStaffId] = useState("");
+
   const [blockedDate, setBlockedDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+
   const [reason, setReason] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
 
-  // Data
   const [branches, setBranches] = useState<Branch[]>([]);
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
 
-  // UI state
   const [loading, setLoading] = useState(true);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [saving, setSaving] = useState(false);
+
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Filter for viewing slots
   const [viewDate, setViewDate] = useState("");
 
-  // Load branches and staff
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
         setErr(null);
 
-        const [bRes, sRes] = await Promise.all([
+        const [branchesRes, staffRes] = await Promise.all([
           branchApi.getAll(),
           staffApi.getAll(),
         ]);
 
-        setBranches(Array.isArray(bRes.data) ? bRes.data : []);
-        setAllStaff(Array.isArray(sRes.data) ? sRes.data : []);
+        setBranches(
+          Array.isArray(branchesRes.data)
+            ? branchesRes.data
+            : []
+        );
 
-        // Set today as default date
-        const today = new Date().toISOString().split("T")[0];
+        setAllStaff(
+          Array.isArray(staffRes.data)
+            ? staffRes.data
+            : []
+        );
+
+        const today = getLocalDateString();
+
         setBlockedDate(today);
         setViewDate(today);
       } catch (e: any) {
-        setErr(e?.message || "Failed to load data");
+        setErr(e?.message || "Failed to load blocked time settings");
       } finally {
         setLoading(false);
       }
@@ -87,39 +128,72 @@ export default function BlockTimeSlotsPage() {
     load();
   }, []);
 
-  // Load blocked slots when date or branch changes
   useEffect(() => {
-    if (viewDate) {
-      loadBlockedSlots();
+    if (!viewDate) return;
+
+    async function loadBlockedSlots() {
+      try {
+        setLoadingSlots(true);
+
+        const res = await blockedSlotsApi.getAll({
+          date: viewDate,
+          branch_id: branchId || undefined,
+        });
+
+        setBlockedSlots(
+          Array.isArray(res.data) ? res.data : []
+        );
+      } catch (e: any) {
+        setErr(
+          e?.message || "Failed to load blocked times"
+        );
+      } finally {
+        setLoadingSlots(false);
+      }
     }
+
+    loadBlockedSlots();
   }, [viewDate, branchId]);
 
-  async function loadBlockedSlots() {
+  const branchStaff = useMemo(() => {
+    if (!branchId) return [];
+
+    return allStaff.filter(
+      (member) => member.branch_id === branchId
+    );
+  }, [allStaff, branchId]);
+
+  async function reloadSlots() {
+    if (!viewDate) return;
+
     try {
+      setLoadingSlots(true);
+
       const res = await blockedSlotsApi.getAll({
         date: viewDate,
         branch_id: branchId || undefined,
       });
 
-      setBlockedSlots(Array.isArray(res.data) ? res.data : []);
+      setBlockedSlots(
+        Array.isArray(res.data) ? res.data : []
+      );
     } catch (e: any) {
-      console.error("Failed to load blocked slots:", e);
+      setErr(
+        e?.message || "Failed to load blocked times"
+      );
+    } finally {
+      setLoadingSlots(false);
     }
   }
 
-  // Get staff for selected branch
-  const branchStaff = branchId
-    ? allStaff.filter((s) => s.branch_id === branchId)
-    : [];
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     setErr(null);
     setSuccess(null);
 
-    // Validation
     if (!branchId) {
-      setErr("Please select a branch");
+      setErr("Please select a location");
       return;
     }
 
@@ -129,7 +203,7 @@ export default function BlockTimeSlotsPage() {
     }
 
     if (!startTime || !endTime) {
-      setErr("Please select start and end times");
+      setErr("Please select a start and end time");
       return;
     }
 
@@ -152,9 +226,8 @@ export default function BlockTimeSlotsPage() {
         customer_phone: customerPhone || undefined,
       });
 
-      setSuccess("Time slot blocked successfully!");
+      setSuccess("Time blocked successfully.");
 
-      // Reset form
       setStartTime("");
       setEndTime("");
       setReason("");
@@ -162,358 +235,491 @@ export default function BlockTimeSlotsPage() {
       setCustomerPhone("");
       setStaffId("");
 
-      // Reload blocked slots
-      loadBlockedSlots();
+      setViewDate(blockedDate);
+
+      await reloadSlots();
     } catch (e: any) {
-      setErr(e?.message || "Failed to block time slot");
+      setErr(
+        e?.message || "Failed to block this time"
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Are you sure you want to remove this blocked time slot?")) {
-      return;
-    }
+    const confirmed = confirm(
+      "Remove this blocked time?"
+    );
+
+    if (!confirmed) return;
 
     try {
       setErr(null);
+      setSuccess(null);
+
       await blockedSlotsApi.delete(id);
-      setSuccess("Blocked slot removed successfully");
-      loadBlockedSlots();
+
+      setBlockedSlots((prev) =>
+        prev.filter((slot) => slot.id !== id)
+      );
+
+      setSuccess("Blocked time removed.");
     } catch (e: any) {
-      setErr(e?.message || "Failed to delete blocked slot");
+      setErr(
+        e?.message || "Failed to remove blocked time"
+      );
     }
   }
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
+      <div className="flex min-h-[420px] items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-purple-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+
+          <p className="mt-4 text-sm text-gray-500">
+            Loading...
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Breadcrumb */}
+    <div className="mx-auto max-w-6xl space-y-7 p-6 lg:p-8">
+      {/* Header */}
+      <div>
         <Link
           href="/salon/bookings"
-          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
+          <ArrowLeft className="h-4 w-4" />
           Back to bookings
         </Link>
 
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Block Time Slots
+        <div className="mt-5">
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+            Block time
           </h1>
-          <p className="text-sm text-gray-500 mt-2">
-            Reserve time slots for walk-in customers or external bookings to prevent app booking conflicts
+
+          <p className="mt-1.5 max-w-2xl text-sm text-gray-500">
+            Mark periods as unavailable to prevent customers from booking
+            those times through Glowee.
           </p>
         </div>
+      </div>
 
-        {/* Messages */}
-        {err && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-red-700 font-medium">{err}</span>
-            </div>
+      {/* Messages */}
+      {err && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+
+          <div>
+            <p className="text-sm font-medium text-red-800">
+              Something went wrong
+            </p>
+
+            <p className="mt-0.5 text-sm text-red-600">
+              {err}
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
-        {success && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4">
+      {success && (
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+
+          <p className="text-sm font-medium text-emerald-700">
+            {success}
+          </p>
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_1.05fr]">
+        {/* Create block */}
+        <section className="rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
             <div className="flex items-center gap-3">
-              <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-green-700 font-medium">{success}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Create Block Form */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                <Lock className="h-5 w-5" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Create Block</h2>
-            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Branch *
-                </label>
+                <h2 className="font-semibold text-gray-900">
+                  New blocked time
+                </h2>
+
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Choose when bookings should be unavailable.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5 p-6"
+          >
+            {/* Location */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Location{" "}
+                <span className="text-red-500">*</span>
+              </label>
+
+              <div className="relative">
+                <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
                 <select
                   value={branchId}
-                  onChange={(e) => setBranchId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  onChange={(e) => {
+                    setBranchId(e.target.value);
+                    setStaffId("");
+                    setErr(null);
+                  }}
+                  className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
                   required
                 >
-                  <option value="">Select branch</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
+                  <option value="">
+                    Select location
+                  </option>
+
+                  {branches.map((branch) => (
+                    <option
+                      key={branch.id}
+                      value={branch.id}
+                    >
+                      {branch.name}
                     </option>
                   ))}
                 </select>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Staff (Optional - Leave empty to block for all staff)
-                </label>
-                <select
-                  value={staffId}
-                  onChange={(e) => setStaffId(e.target.value)}
-                  disabled={!branchId}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:bg-gray-100"
-                >
-                  <option value="">All staff at this branch</option>
-                  {branchStaff.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Team */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Team member
+              </label>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Date *
-                </label>
-                <input
-                  type="date"
-                  value={blockedDate}
-                  onChange={(e) => setBlockedDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Start Time *
-                  </label>
-                  <input
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    End Time *
-                  </label>
-                  <input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Reason (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="e.g., Walk-in customer, Phone booking, Maintenance"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Customer Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Customer name"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Customer Phone (Optional)
-                </label>
-                <input
-                  type="tel"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="+971 50 123 4567"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-orange-600 to-red-600 text-white px-6 py-3.5 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              <select
+                value={staffId}
+                onChange={(e) =>
+                  setStaffId(e.target.value)
+                }
+                disabled={!branchId}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
               >
-                {saving ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Blocking...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    Block Time Slot
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
+                <option value="">
+                  All team members
+                </option>
 
-          {/* Blocked Slots List */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-bold text-gray-900">Blocked Slots</h2>
-              </div>
+                {branchStaff.map((member) => (
+                  <option
+                    key={member.id}
+                    value={member.id}
+                  >
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+
+              <p className="mt-1.5 text-xs text-gray-400">
+                Leave empty to block the time for the whole location.
+              </p>
+            </div>
+
+            {/* Date */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Date{" "}
+                <span className="text-red-500">*</span>
+              </label>
 
               <input
                 type="date"
-                value={viewDate}
-                onChange={(e) => setViewDate(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                value={blockedDate}
+                onChange={(e) =>
+                  setBlockedDate(e.target.value)
+                }
+                min={getLocalDateString()}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                required
               />
             </div>
 
-            <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {blockedSlots.length === 0 ? (
-                <div className="text-center py-12">
-                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <p className="text-gray-500 font-semibold">No blocked slots for this date</p>
+            {/* Times */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Start time{" "}
+                  <span className="text-red-500">*</span>
+                </label>
+
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) =>
+                    setStartTime(e.target.value)
+                  }
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  End time{" "}
+                  <span className="text-red-500">*</span>
+                </label>
+
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) =>
+                    setEndTime(e.target.value)
+                  }
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Reason */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Reason
+              </label>
+
+              <input
+                type="text"
+                value={reason}
+                onChange={(e) =>
+                  setReason(e.target.value)
+                }
+                placeholder="e.g. Break, maintenance, unavailable"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+
+            {/* Optional customer */}
+            <div className="border-t border-gray-100 pt-5">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">
+                  Customer details
+                </h3>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Only add these if this blocked time represents an
+                  offline customer booking.
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Customer name
+                  </label>
+
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={(e) =>
+                      setCustomerName(e.target.value)
+                    }
+                    placeholder="Optional"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                  />
                 </div>
-              ) : (
-                blockedSlots.map((slot) => (
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Phone
+                  </label>
+
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) =>
+                      setCustomerPhone(e.target.value)
+                    }
+                    placeholder="+971..."
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              {saving ? "Blocking time..." : "Block time"}
+            </button>
+          </form>
+        </section>
+
+        {/* Blocked slots */}
+        <section className="rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">
+                  Blocked times
+                </h2>
+
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Review unavailable periods for a selected date.
+                </p>
+              </div>
+
+              <div className="relative">
+                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+                <input
+                  type="date"
+                  value={viewDate}
+                  onChange={(e) =>
+                    setViewDate(e.target.value)
+                  }
+                  className="rounded-xl border border-gray-200 py-2.5 pl-9 pr-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {loadingSlots ? (
+              <div className="py-14 text-center">
+                <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+
+                <p className="mt-3 text-sm text-gray-500">
+                  Loading blocked times...
+                </p>
+              </div>
+            ) : blockedSlots.length === 0 ? (
+              <div className="py-14 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                  <CalendarDays className="h-5 w-5 text-gray-400" />
+                </div>
+
+                <h3 className="mt-4 text-sm font-medium text-gray-800">
+                  No blocked times
+                </h3>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  This date is currently open for bookings.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {blockedSlots.map((slot) => (
                   <div
                     key={slot.id}
-                    className="p-4 border-2 border-orange-200 bg-orange-50 rounded-xl hover:bg-orange-100 transition-colors"
+                    className="py-5 first:pt-0 last:pb-0"
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="font-bold text-orange-900">
-                          {slot.start_time} - {slot.end_time}
-                        </span>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                            <Clock3 className="h-4 w-4 text-gray-400" />
+
+                            {formatTime(slot.start_time)}
+                            <span className="text-gray-300">–</span>
+                            {formatTime(slot.end_time)}
+                          </div>
+
+                          {slot.customer_name && (
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                              Manual booking
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-3 grid gap-2 text-sm text-gray-500 sm:grid-cols-2">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 shrink-0 text-gray-400" />
+
+                            <span className="truncate">
+                              {slot.branch_name}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <UsersRound className="h-4 w-4 shrink-0 text-gray-400" />
+
+                            <span className="truncate">
+                              {slot.staff_name ||
+                                "All team members"}
+                            </span>
+                          </div>
+
+                          {slot.reason && (
+                            <div className="flex items-center gap-2 sm:col-span-2">
+                              <MessageSquareText className="h-4 w-4 shrink-0 text-gray-400" />
+
+                              <span>
+                                {slot.reason}
+                              </span>
+                            </div>
+                          )}
+
+                          {slot.customer_name && (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:col-span-2">
+                              <span className="inline-flex items-center gap-1.5">
+                                <UserRound className="h-4 w-4 text-gray-400" />
+                                {slot.customer_name}
+                              </span>
+
+                              {slot.customer_phone && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Phone className="h-4 w-4 text-gray-400" />
+                                  {slot.customer_phone}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <button
-                        onClick={() => handleDelete(slot.id)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Remove block"
+                        type="button"
+                        onClick={() =>
+                          handleDelete(slot.id)
+                        }
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                        title="Remove blocked time"
                       >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-
-                    <div className="space-y-1 text-sm text-orange-800">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        </svg>
-                        <span className="font-semibold">{slot.branch_name}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        <span>{slot.staff_name || "All staff"}</span>
-                      </div>
-
-                      {slot.reason && (
-                        <div className="flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                          </svg>
-                          <span>{slot.reason}</span>
-                        </div>
-                      )}
-
-                      {slot.customer_name && (
-                        <div className="flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                          <span>{slot.customer_name}</span>
-                          {slot.customer_phone && (
-                            <span className="text-orange-600">• {slot.customer_phone}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+        </section>
+      </div>
 
-        {/* Info Box */}
-        <div className="mt-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
-          <div className="flex items-start gap-3">
-            <svg className="w-6 h-6 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <h3 className="font-bold text-blue-900 mb-1">How it works</h3>
-              <p className="text-sm text-blue-800">
-                Blocked time slots prevent customers from booking those specific times in the mobile app. 
-                Use this feature when you have bookings from walk-ins, phone calls, or other external sources 
-                to avoid double-booking.
-              </p>
-            </div>
-          </div>
+      {/* Explanation */}
+      <div className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+        <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary-600" />
+
+        <div>
+          <p className="text-sm font-medium text-gray-800">
+            How blocked time works
+          </p>
+
+          <p className="mt-1 text-sm leading-6 text-gray-500">
+            Glowee will treat these periods as unavailable and prevent
+            customers from booking over them. Use this for breaks,
+            maintenance, unavailable team members, or reservations received
+            outside Glowee.
+          </p>
         </div>
       </div>
     </div>

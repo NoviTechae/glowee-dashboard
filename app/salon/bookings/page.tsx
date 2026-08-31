@@ -3,11 +3,38 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { api, blockedSlotsApi, branchApi, staffApi } from "@/lib/api";
+import {
+  AlertCircle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  ExternalLink,
+  MapPin,
+  Phone,
+  Plus,
+  Search,
+  Trash2,
+  UserRound,
+  UsersRound,
+  X,
+} from "lucide-react";
+
+import {
+  api,
+  blockedSlotsApi,
+  branchApi,
+  staffApi,
+} from "@/lib/api";
 
 type BookingRow = {
   id: string;
-  status: "pending" | "confirmed" | "completed" | "cancelled" | "no_show";
+  status:
+    | "pending"
+    | "confirmed"
+    | "completed"
+    | "cancelled"
+    | "no_show";
   total_aed: number;
   scheduled_at: string;
   created_at: string;
@@ -62,96 +89,164 @@ type Staff = {
 };
 
 const STATUS_OPTIONS = [
-  { value: "all", label: "All Bookings" },
+  { value: "all", label: "All statuses" },
   { value: "pending", label: "Pending" },
   { value: "confirmed", label: "Confirmed" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
-  { value: "no_show", label: "No Show" },
+  { value: "no_show", label: "No show" },
 ];
 
+const EMPTY_ADD_FORM = {
+  branch_id: "",
+  staff_id: "",
+  blocked_date: "",
+  start_time: "",
+  end_time: "",
+  reason: "",
+  customer_name: "",
+  customer_phone: "",
+};
+
 function statusClasses(status: string) {
-  if (status === "pending") return "bg-yellow-100 text-yellow-800 border-yellow-300";
-  if (status === "confirmed") return "bg-blue-100 text-blue-800 border-blue-300";
-  if (status === "completed") return "bg-green-100 text-green-800 border-green-300";
-  if (status === "cancelled") return "bg-red-100 text-red-800 border-red-300";
-  if (status === "no_show") return "bg-gray-100 text-gray-800 border-gray-300";
-  return "bg-gray-50 text-gray-700 border-gray-200";
+  if (status === "pending") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  if (status === "confirmed") {
+    return "bg-blue-50 text-blue-700";
+  }
+
+  if (status === "completed") {
+    return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "cancelled") {
+    return "bg-red-50 text-red-700";
+  }
+
+  if (status === "no_show") {
+    return "bg-gray-100 text-gray-600";
+  }
+
+  return "bg-gray-100 text-gray-600";
 }
 
-function formatMoney(v: number | string | null | undefined) {
-  return `AED ${Number(v || 0).toFixed(2)}`;
+function formatMoney(value: number | string | null | undefined) {
+  return `AED ${Number(value || 0).toFixed(2)}`;
 }
 
-function formatDateTime(v?: string | null) {
-  if (!v) return "-";
-  const d = new Date(v);
-  return d.toLocaleString([], {
-    year: "numeric",
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  return date.toLocaleString([], {
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function formatTime(time: string) {
-  return time.substring(0, 5); // HH:MM
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+
+  const date = new Date(`${value}T00:00:00`);
+
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return "-";
+
+  return value.substring(0, 5);
+}
+
+function getLocalDateString() {
+  const date = new Date();
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 export default function SalonBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Tabs
-  const [activeTab, setActiveTab] = useState<"all" | "app" | "external">("all");
+  const [activeTab, setActiveTab] = useState<
+    "all" | "app" | "external"
+  >("all");
 
-  // Data
   const [appBookings, setAppBookings] = useState<BookingRow[]>([]);
-  const [externalBookings, setExternalBookings] = useState<ExternalBooking[]>([]);
+  const [externalBookings, setExternalBookings] = useState<
+    ExternalBooking[]
+  >([]);
+
   const [branches, setBranches] = useState<Branch[]>([]);
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
 
-  // Filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
 
-  // Add External Modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({
-    branch_id: "",
-    staff_id: "",
-    blocked_date: "",
-    start_time: "",
-    end_time: "",
-    reason: "",
-    customer_name: "",
-    customer_phone: "",
-  });
+
+  const [addForm, setAddForm] =
+    useState(EMPTY_ADD_FORM);
 
   async function loadAll() {
     try {
       setLoading(true);
       setErr(null);
 
-      const [appRes, extRes, branchRes, staffRes] = await Promise.all([
-        api.get("/dashboard/salon/bookings"),
-        blockedSlotsApi.getAll({}),
-        branchApi.getAll(),
-        staffApi.getAll(),
-      ]);
+      const [appRes, extRes, branchRes, staffRes] =
+        await Promise.all([
+          api.get("/dashboard/salon/bookings"),
+          blockedSlotsApi.getAll({}),
+          branchApi.getAll(),
+          staffApi.getAll(),
+        ]);
 
-      const app = Array.isArray(appRes?.data) ? appRes.data : [];
-      setAppBookings(app.map((b: any) => ({ ...b, source: "app" as const })));
+      const app = Array.isArray(appRes?.data)
+        ? appRes.data
+        : [];
 
-      setExternalBookings(Array.isArray(extRes?.data) ? extRes.data : []);
-      setBranches(Array.isArray(branchRes?.data) ? branchRes.data : []);
-      setAllStaff(Array.isArray(staffRes?.data) ? staffRes.data : []);
+      setAppBookings(
+        app.map((booking: any) => ({
+          ...booking,
+          source: "app" as const,
+        }))
+      );
 
-      // Don't auto-filter by date - show all bookings by default
+      setExternalBookings(
+        Array.isArray(extRes?.data)
+          ? extRes.data
+          : []
+      );
+
+      setBranches(
+        Array.isArray(branchRes?.data)
+          ? branchRes.data
+          : []
+      );
+
+      setAllStaff(
+        Array.isArray(staffRes?.data)
+          ? staffRes.data
+          : []
+      );
     } catch (e: any) {
       setErr(e?.message || "Failed to load bookings");
     } finally {
@@ -163,47 +258,84 @@ export default function SalonBookingsPage() {
     loadAll();
   }, []);
 
-  async function updateStatus(bookingId: string, status: string) {
+  async function updateStatus(
+    bookingId: string,
+    status: string
+  ) {
     try {
       setSavingId(bookingId);
       setErr(null);
+      setSuccess(null);
 
-      const res = await api.put(`/dashboard/salon/bookings/${bookingId}/status`, { status });
+      const res = await api.put(
+        `/dashboard/salon/bookings/${bookingId}/status`,
+        { status }
+      );
 
       setAppBookings((prev) =>
-        prev.map((b) =>
-          b.id === bookingId
-            ? { ...b, status: (res?.booking?.status || status) as BookingRow["status"] }
-            : b
+        prev.map((booking) =>
+          booking.id === bookingId
+            ? {
+                ...booking,
+                status: (
+                  res?.booking?.status || status
+                ) as BookingRow["status"],
+              }
+            : booking
         )
       );
+
+      setSuccess("Booking status updated.");
     } catch (e: any) {
-      setErr(e?.message || "Failed to update booking");
+      setErr(
+        e?.message || "Failed to update booking"
+      );
     } finally {
       setSavingId(null);
     }
   }
 
   async function deleteExternalBooking(id: string) {
-    if (!confirm("Are you sure you want to remove this external booking?")) return;
+    const confirmed = confirm(
+      "Remove this manual booking?"
+    );
+
+    if (!confirmed) return;
 
     try {
       setErr(null);
+      setSuccess(null);
+
       await blockedSlotsApi.delete(id);
-      setSuccess("External booking removed successfully");
-      loadAll();
+
+      setExternalBookings((prev) =>
+        prev.filter((booking) => booking.id !== id)
+      );
+
+      setSuccess("Manual booking removed.");
     } catch (e: any) {
-      setErr(e?.message || "Failed to delete external booking");
+      setErr(
+        e?.message ||
+          "Failed to remove manual booking"
+      );
     }
   }
 
-  async function handleAddExternal(e: React.FormEvent) {
+  async function handleAddExternal(
+    e: React.FormEvent
+  ) {
     e.preventDefault();
+
     setErr(null);
     setSuccess(null);
 
-    if (!addForm.branch_id || !addForm.blocked_date || !addForm.start_time || !addForm.end_time) {
-      setErr("Please fill all required fields");
+    if (
+      !addForm.branch_id ||
+      !addForm.blocked_date ||
+      !addForm.start_time ||
+      !addForm.end_time
+    ) {
+      setErr("Please fill in all required fields");
       return;
     }
 
@@ -220,595 +352,876 @@ export default function SalonBookingsPage() {
         start_time: addForm.start_time,
         end_time: addForm.end_time,
         reason: addForm.reason || undefined,
-        customer_name: addForm.customer_name || undefined,
-        customer_phone: addForm.customer_phone || undefined,
+        customer_name:
+          addForm.customer_name || undefined,
+        customer_phone:
+          addForm.customer_phone || undefined,
       });
 
-      setSuccess("External booking added successfully!");
       setShowAddModal(false);
-      setAddForm({
-        branch_id: "",
-        staff_id: "",
-        blocked_date: "",
-        start_time: "",
-        end_time: "",
-        reason: "",
-        customer_name: "",
-        customer_phone: "",
-      });
-      loadAll();
+      setAddForm(EMPTY_ADD_FORM);
+
+      setSuccess("Manual booking added.");
+
+      await loadAll();
     } catch (e: any) {
-      setErr(e?.message || "Failed to add external booking");
+      setErr(
+        e?.message ||
+          "Failed to add manual booking"
+      );
     }
   }
 
-  // Combined bookings for "All" tab
+  function closeAddModal() {
+    setShowAddModal(false);
+    setAddForm(EMPTY_ADD_FORM);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setDateFilter("");
+  }
+
   const allBookings = useMemo(() => {
     const combined: CombinedBooking[] = [
-      ...appBookings.map(b => ({
-        ...b,
+      ...appBookings.map((booking) => ({
+        ...booking,
         type: "app" as const,
-        time: b.scheduled_at,
+        time: booking.scheduled_at,
       })),
-      ...externalBookings.map(e => ({
-        id: e.id,
+
+      ...externalBookings.map((booking) => ({
+        id: booking.id,
         type: "external" as const,
-        customer_name: e.customer_name || "Walk-in",
-        customer_phone: e.customer_phone,
-        branch_name: e.branch_name,
-        staff_name: e.staff_name,
-        time: `${e.blocked_date}T${e.start_time}`,
-        start_time: e.start_time,
-        end_time: e.end_time,
-        blocked_date: e.blocked_date,
-        reason: e.reason,
+        customer_name:
+          booking.customer_name || "Walk-in",
+        customer_phone:
+          booking.customer_phone,
+        branch_name: booking.branch_name,
+        staff_name: booking.staff_name,
+        time: `${booking.blocked_date}T${booking.start_time}`,
+        start_time: booking.start_time,
+        end_time: booking.end_time,
+        blocked_date: booking.blocked_date,
+        reason: booking.reason,
         source: "external" as const,
       })),
     ];
 
-    return combined.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    return combined.sort(
+      (a, b) =>
+        new Date(b.time).getTime() -
+        new Date(a.time).getTime()
+    );
   }, [appBookings, externalBookings]);
 
   const filteredBookings = useMemo(() => {
-    let data: CombinedBooking[] = activeTab === "app" 
-      ? appBookings.map(b => ({
-          ...b,
-          type: "app" as const,
-          time: b.scheduled_at,
-        }))
-      : activeTab === "external" 
-      ? externalBookings.map(e => ({
-          id: e.id,
-          type: "external" as const,
-          customer_name: e.customer_name || "Walk-in",
-          customer_phone: e.customer_phone,
-          branch_name: e.branch_name,
-          staff_name: e.staff_name,
-          time: `${e.blocked_date}T${e.start_time}`,
-          start_time: e.start_time,
-          end_time: e.end_time,
-          blocked_date: e.blocked_date,
-          reason: e.reason,
-          source: "external" as const,
-        }))
-      : allBookings;
+    let data: CombinedBooking[];
 
-    console.log("🔍 DEBUG - activeTab:", activeTab);
-    console.log("🔍 DEBUG - data before filtering:", data.length);
-    console.log("🔍 DEBUG - appBookings:", appBookings.length);
-    console.log("🔍 DEBUG - externalBookings:", externalBookings.length);
-    console.log("🔍 DEBUG - allBookings:", allBookings.length);
+    if (activeTab === "app") {
+      data = appBookings.map((booking) => ({
+        ...booking,
+        type: "app" as const,
+        time: booking.scheduled_at,
+      }));
+    } else if (activeTab === "external") {
+      data = externalBookings.map((booking) => ({
+        id: booking.id,
+        type: "external" as const,
+        customer_name:
+          booking.customer_name || "Walk-in",
+        customer_phone:
+          booking.customer_phone,
+        branch_name: booking.branch_name,
+        staff_name: booking.staff_name,
+        time: `${booking.blocked_date}T${booking.start_time}`,
+        start_time: booking.start_time,
+        end_time: booking.end_time,
+        blocked_date: booking.blocked_date,
+        reason: booking.reason,
+        source: "external" as const,
+      }));
+    } else {
+      data = allBookings;
+    }
 
-    const q = search.trim().toLowerCase();
+    const query = search.trim().toLowerCase();
 
-    const result = data.filter((b: CombinedBooking) => {
-      // Status filter (app bookings only)
-      if (activeTab !== "external" && b.type === "app" && b.status) {
-        const matchStatus = statusFilter === "all" || b.status === statusFilter;
-        if (!matchStatus) return false;
+    return data.filter((booking) => {
+      if (
+        booking.type === "app" &&
+        statusFilter !== "all" &&
+        booking.status !== statusFilter
+      ) {
+        return false;
       }
 
-      // Date filter
       if (dateFilter) {
-        const bookingDate = b.type === "app" 
-          ? b.scheduled_at?.split("T")[0]
-          : b.blocked_date || b.time?.split("T")[0];
-        
-        if (bookingDate !== dateFilter) return false;
+        const bookingDate =
+          booking.type === "app"
+            ? booking.scheduled_at?.split("T")[0]
+            : booking.blocked_date;
+
+        if (bookingDate !== dateFilter) {
+          return false;
+        }
       }
 
-      // Search
-      const matchSearch =
-        !q ||
-        String(b.customer_name || "").toLowerCase().includes(q) ||
-        String(b.customer_phone || "").toLowerCase().includes(q) ||
-        String(b.branch_name || "").toLowerCase().includes(q) ||
-        String(b.staff_name || "").toLowerCase().includes(q) ||
-        String(b.id || "").toLowerCase().includes(q);
+      if (query) {
+        const searchable = [
+          booking.customer_name,
+          booking.customer_phone,
+          booking.branch_name,
+          booking.staff_name,
+          booking.id,
+        ]
+          .map((value) =>
+            String(value || "").toLowerCase()
+          )
+          .join(" ");
 
-      return matchSearch;
+        if (!searchable.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
     });
+  }, [
+    activeTab,
+    appBookings,
+    externalBookings,
+    allBookings,
+    search,
+    statusFilter,
+    dateFilter,
+  ]);
 
-    console.log("🔍 DEBUG - filtered result:", result.length);
-    console.log("🔍 DEBUG - filtered items:", result);
-    
-    return result;
-  }, [activeTab, appBookings, externalBookings, allBookings, search, statusFilter, dateFilter]);
+  const todayCount = useMemo(() => {
+    const today = getLocalDateString();
 
-  const stats = useMemo(() => {
-    return {
-      total: appBookings.length + externalBookings.length,
-      app: appBookings.length,
-      external: externalBookings.length,
-      today: allBookings.filter((b: CombinedBooking) => {
-        const today = new Date().toISOString().split("T")[0];
-        const bookingDate = b.type === "app"
-          ? b.scheduled_at?.split("T")[0]
-          : b.blocked_date || b.time?.split("T")[0];
-        return bookingDate === today;
-      }).length,
-    };
-  }, [appBookings, externalBookings, allBookings]);
+    return allBookings.filter((booking) => {
+      const bookingDate =
+        booking.type === "app"
+          ? booking.scheduled_at?.split("T")[0]
+          : booking.blocked_date;
+
+      return bookingDate === today;
+    }).length;
+  }, [allBookings]);
 
   const branchStaff = addForm.branch_id
-    ? allStaff.filter(s => s.branch_id === addForm.branch_id)
+    ? allStaff.filter(
+        (member) =>
+          member.branch_id === addForm.branch_id
+      )
     : [];
+
+  const hasFilters =
+    search.trim().length > 0 ||
+    statusFilter !== "all" ||
+    dateFilter.length > 0;
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
+      <div className="flex min-h-[420px] items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-purple-600"></div>
-          <p className="mt-4 text-gray-600">Loading bookings...</p>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+
+          <p className="mt-4 text-sm text-gray-500">
+            Loading bookings...
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto max-w-7xl space-y-7 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-3xl font-bold text-transparent">
-            All Bookings
-          </h1>
-          <p className="mt-2 text-sm text-gray-500">
-            Manage app bookings and external reservations in one place
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+              Bookings
+            </h1>
+
+            {todayCount > 0 && (
+              <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+                {todayCount} today
+              </span>
+            )}
+          </div>
+
+          <p className="mt-1.5 text-sm text-gray-500">
+            Manage Glowee bookings and reservations received outside the
+            platform.
           </p>
         </div>
 
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 rounded-xl border-2 border-orange-300 bg-orange-50 px-4 py-2.5 font-semibold text-orange-700 transition-colors hover:bg-orange-100"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add External
-          </button>
-
-          <button
-            onClick={loadAll}
-            className="flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setErr(null);
+            setSuccess(null);
+            setShowAddModal(true);
+          }}
+          className="inline-flex w-fit items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+        >
+          <Plus className="h-4 w-4" />
+          Add manual booking
+        </button>
       </div>
 
       {/* Messages */}
       {err && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <div className="flex items-center gap-3">
-            <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium text-red-700">{err}</span>
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+
+          <div>
+            <p className="text-sm font-medium text-red-800">
+              Something went wrong
+            </p>
+
+            <p className="mt-0.5 text-sm text-red-600">
+              {err}
+            </p>
           </div>
         </div>
       )}
 
       {success && (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-          <div className="flex items-center gap-3">
-            <svg className="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium text-green-700">{success}</span>
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+
+          <p className="text-sm font-medium text-emerald-700">
+            {success}
+          </p>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <div className="flex gap-6 overflow-x-auto">
+          <TabButton
+            active={activeTab === "all"}
+            onClick={() => setActiveTab("all")}
+            label="All"
+            count={
+              appBookings.length +
+              externalBookings.length
+            }
+          />
+
+          <TabButton
+            active={activeTab === "app"}
+            onClick={() => setActiveTab("app")}
+            label="Glowee"
+            count={appBookings.length}
+          />
+
+          <TabButton
+            active={activeTab === "external"}
+            onClick={() => setActiveTab("external")}
+            label="Manual"
+            count={externalBookings.length}
+          />
+        </div>
+      </div>
+
+      {/* Filters */}
+      <section className="rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+            <input
+              value={search}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+              placeholder="Search customer, phone, location or team member..."
+              className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+
+          {/* Date */}
+          <div className="relative">
+            <CalendarDays className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) =>
+                setDateFilter(e.target.value)
+              }
+              className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100 lg:w-auto"
+            />
+          </div>
+
+          {/* Status */}
+          {activeTab !== "external" && (
+            <select
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value)
+              }
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+            >
+              <X className="h-4 w-4" />
+              Clear
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Results count */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">
+          {filteredBookings.length}{" "}
+          {filteredBookings.length === 1
+            ? "booking"
+            : "bookings"}
+        </p>
+      </div>
+
+      {/* Booking list */}
+      {filteredBookings.length === 0 ? (
+        <div className="rounded-2xl border border-gray-200 bg-white px-6 py-14 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+            <CalendarDays className="h-5 w-5 text-gray-400" />
+          </div>
+
+          <h2 className="mt-4 text-lg font-semibold text-gray-900">
+            No bookings found
+          </h2>
+
+          <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+            {hasFilters
+              ? "Try changing or clearing your filters."
+              : "New Glowee bookings and manual reservations will appear here."}
+          </p>
+
+          {!hasFilters && (
+            <button
+              type="button"
+              onClick={() =>
+                setShowAddModal(true)
+              }
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+            >
+              <Plus className="h-4 w-4" />
+              Add manual booking
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="divide-y divide-gray-100">
+            {filteredBookings.map((booking) => (
+              <div
+                key={booking.id}
+                className="px-5 py-5 transition hover:bg-gray-50/60"
+              >
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                  {/* Left */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Source */}
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          booking.type === "app"
+                            ? "bg-primary-50 text-primary-700"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {booking.type === "app"
+                          ? "Glowee"
+                          : "Manual"}
+                      </span>
+
+                      {/* Status */}
+                      {booking.type === "app" &&
+                        booking.status && (
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusClasses(
+                              booking.status
+                            )}`}
+                          >
+                            {booking.status.replace(
+                              "_",
+                              " "
+                            )}
+                          </span>
+                        )}
+
+                      <span className="text-xs text-gray-400">
+                        #{booking.id.slice(0, 8)}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      {/* Customer */}
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                          <UserRound className="h-4 w-4 text-gray-500" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-900">
+                            {booking.customer_name ||
+                              "Customer"}
+                          </p>
+
+                          {booking.customer_phone ? (
+                            <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
+                              <Phone className="h-3 w-3" />
+                              {booking.customer_phone}
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              No phone
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Location */}
+                      <BookingInfo
+                        icon={
+                          <MapPin className="h-4 w-4" />
+                        }
+                        label="Location"
+                        value={
+                          booking.branch_name || "-"
+                        }
+                      />
+
+                      {/* Date & time */}
+                      <BookingInfo
+                        icon={
+                          <Clock3 className="h-4 w-4" />
+                        }
+                        label="Date & time"
+                        value={
+                          booking.type === "app"
+                            ? formatDateTime(
+                                booking.scheduled_at
+                              )
+                            : `${formatDate(
+                                booking.blocked_date
+                              )} · ${formatTime(
+                                booking.start_time
+                              )}–${formatTime(
+                                booking.end_time
+                              )}`
+                        }
+                      />
+
+                      {/* Fourth info */}
+                      {booking.type === "app" ? (
+                        <BookingInfo
+                          label="Total"
+                          value={formatMoney(
+                            booking.total_aed
+                          )}
+                        />
+                      ) : booking.staff_name ? (
+                        <BookingInfo
+                          icon={
+                            <UsersRound className="h-4 w-4" />
+                          }
+                          label="Team member"
+                          value={booking.staff_name}
+                        />
+                      ) : (
+                        <BookingInfo
+                          label="Note"
+                          value={
+                            booking.reason ||
+                            "Manual reservation"
+                          }
+                        />
+                      )}
+                    </div>
+
+                    {/* Manual reason if team exists */}
+                    {booking.type === "external" &&
+                      booking.staff_name &&
+                      booking.reason && (
+                        <p className="mt-3 text-xs text-gray-500">
+                          Note: {booking.reason}
+                        </p>
+                      )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex shrink-0 items-center gap-2 border-t border-gray-100 pt-4 xl:border-0 xl:pt-0">
+                    {booking.type === "app" ? (
+                      <>
+                        {booking.status &&
+                          booking.status !==
+                            "cancelled" &&
+                          booking.status !==
+                            "completed" && (
+                            <select
+                              value={booking.status}
+                              disabled={
+                                savingId === booking.id
+                              }
+                              onChange={(e) =>
+                                updateStatus(
+                                  booking.id,
+                                  e.target.value
+                                )
+                              }
+                              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 outline-none transition hover:bg-gray-50 focus:border-primary-300 focus:ring-2 focus:ring-primary-100 disabled:opacity-50"
+                            >
+                              <option value="pending">
+                                Pending
+                              </option>
+
+                              <option value="confirmed">
+                                Confirmed
+                              </option>
+
+                              <option value="completed">
+                                Completed
+                              </option>
+
+                              <option value="cancelled">
+                                Cancelled
+                              </option>
+
+                              <option value="no_show">
+                                No show
+                              </option>
+                            </select>
+                          )}
+
+                        <Link
+                          href={`/salon/bookings/${booking.id}`}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                        >
+                          View
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deleteExternalBooking(
+                            booking.id
+                          )
+                        }
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                        title="Remove manual booking"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard title="Total" value={stats.total} icon="📊" />
-        <StatCard title="App Bookings" value={stats.app} icon="📱" tone="blue" />
-        <StatCard title="External" value={stats.external} icon="🚶" tone="orange" />
-        <StatCard title="Today" value={stats.today} icon="📅" tone="green" />
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab("all")}
-          className={`px-6 py-3 font-semibold transition-all ${
-            activeTab === "all"
-              ? "border-b-2 border-purple-600 text-purple-600"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          All ({stats.total})
-        </button>
-        <button
-          onClick={() => setActiveTab("app")}
-          className={`px-6 py-3 font-semibold transition-all ${
-            activeTab === "app"
-              ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          📱 App ({stats.app})
-        </button>
-        <button
-          onClick={() => setActiveTab("external")}
-          className={`px-6 py-3 font-semibold transition-all ${
-            activeTab === "external"
-              ? "border-b-2 border-orange-600 text-orange-600"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          🚶 External ({stats.external})
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-          <h2 className="text-lg font-bold text-gray-900">Filters</h2>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Search</label>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Customer, branch, phone..."
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-            />
-          </div>
-
-          {/* <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-              />
-              {dateFilter && (
-                <button
-                  onClick={() => setDateFilter("")}
-                  className="px-3 py-2 rounded-xl border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
-                  title="Clear date filter"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div> */}
-
-          {activeTab !== "external" && (
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bookings List */}
-      <div className="space-y-3">
-        {filteredBookings.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-16 text-center">
-            <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <p className="text-gray-500 font-semibold mb-2">No bookings found</p>
-            <p className="text-gray-400 text-sm">Try adjusting your filters or add a new booking</p>
-          </div>
-        ) : (
-          filteredBookings.map((b: CombinedBooking) => (
-            <div
-              key={b.id}
-              className={`rounded-2xl border-2 p-6 transition-all hover:shadow-md ${
-                b.type === "external"
-                  ? "border-orange-200 bg-orange-50"
-                  : "border-gray-200 bg-white"
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    {/* Source Badge */}
-                    <span
-                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
-                        b.type === "app"
-                          ? "bg-blue-100 text-blue-700 border-2 border-blue-300"
-                          : "bg-orange-100 text-orange-700 border-2 border-orange-300"
-                      }`}
-                    >
-                      {b.type === "app" ? "📱 App" : "🚶 External"}
-                    </span>
-
-                    {/* Status Badge (App only) */}
-                    {b.type === "app" && b.status && (
-                      <span className={`inline-flex items-center rounded-full border-2 px-3 py-1 text-xs font-bold capitalize ${statusClasses(b.status)}`}>
-                        {b.status.replace("_", " ")}
-                      </span>
-                    )}
-
-                    {/* ID */}
-                    <span className="font-mono text-xs font-bold text-gray-500">
-                      #{b.id.slice(0, 8)}
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                    {/* Customer */}
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white font-bold">
-                        {(b.customer_name || "C").charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-gray-900">{b.customer_name || "Customer"}</div>
-                        <div className="text-xs text-gray-500">{b.customer_phone || "-"}</div>
-                      </div>
-                    </div>
-
-                    {/* Branch */}
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Branch</div>
-                      <div className="text-sm font-semibold text-gray-900">{b.branch_name || "-"}</div>
-                    </div>
-
-                    {/* Staff */}
-                    {b.staff_name && (
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Staff</div>
-                        <div className="text-sm font-semibold text-gray-900">{b.staff_name}</div>
-                      </div>
-                    )}
-
-                    {/* Time */}
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Time</div>
-                      <div className="text-sm font-semibold text-gray-900">
-                        {b.type === "app" 
-                          ? formatDateTime(b.scheduled_at)
-                          : `${formatTime(b.start_time || "00:00:00")} - ${formatTime(b.end_time || "00:00:00")}`
-                        }
-                      </div>
-                    </div>
-
-                    {/* Total (App only) */}
-                    {b.type === "app" && b.total_aed !== undefined && (
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Total</div>
-                        <div className="text-sm font-bold text-gray-900">{formatMoney(b.total_aed)}</div>
-                      </div>
-                    )}
-
-                    {/* Reason (External only) */}
-                    {b.type === "external" && b.reason && (
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Reason</div>
-                        <div className="text-sm font-semibold text-gray-900">{b.reason}</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  {b.type === "app" ? (
-                    <>
-                      <Link
-                        href={`/salon/bookings/${b.id}`}
-                        className="flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        View
-                      </Link>
-
-                      {b.status && b.status !== "cancelled" && b.status !== "completed" && (
-                        <select
-                          value={b.status}
-                          disabled={savingId === b.id}
-                          onChange={(e) => updateStatus(b.id, e.target.value)}
-                          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="confirmed">Confirmed</option>
-                          <option value="completed">Completed</option>
-                          <option value="cancelled">Cancelled</option>
-                          <option value="no_show">No Show</option>
-                        </select>
-                      )}
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => deleteExternalBooking(b.id)}
-                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
-                      title="Remove booking"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Add External Booking Modal */}
+      {/* Add manual booking */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">Add External Booking</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl">
+            {/* Modal header */}
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-100 bg-white px-6 py-5">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Add manual booking
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Add a reservation received by phone,
+                  WhatsApp or walk-in.
+                </p>
+              </div>
+
               <button
-                onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                type="button"
+                onClick={closeAddModal}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddExternal} className="p-6 space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+            <form
+              onSubmit={handleAddExternal}
+              className="space-y-6 p-6"
+            >
+              {/* Location */}
+              <div className="grid gap-5 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Branch *</label>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Location{" "}
+                    <span className="text-red-500">
+                      *
+                    </span>
+                  </label>
+
                   <select
                     value={addForm.branch_id}
-                    onChange={(e) => setAddForm({ ...addForm, branch_id: e.target.value, staff_id: "" })}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                    onChange={(e) =>
+                      setAddForm({
+                        ...addForm,
+                        branch_id:
+                          e.target.value,
+                        staff_id: "",
+                      })
+                    }
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
                     required
                   >
-                    <option value="">Select branch</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
+                    <option value="">
+                      Select location
+                    </option>
+
+                    {branches.map((branch) => (
+                      <option
+                        key={branch.id}
+                        value={branch.id}
+                      >
+                        {branch.name}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Staff (Optional)</label>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Team member
+                  </label>
+
                   <select
                     value={addForm.staff_id}
-                    onChange={(e) => setAddForm({ ...addForm, staff_id: e.target.value })}
-                    disabled={!addForm.branch_id}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                    onChange={(e) =>
+                      setAddForm({
+                        ...addForm,
+                        staff_id:
+                          e.target.value,
+                      })
+                    }
+                    disabled={
+                      !addForm.branch_id
+                    }
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
                   >
-                    <option value="">All staff</option>
-                    {branchStaff.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
+                    <option value="">
+                      No specific member
+                    </option>
+
+                    {branchStaff.map(
+                      (member) => (
+                        <option
+                          key={member.id}
+                          value={member.id}
+                        >
+                          {member.name}
+                        </option>
+                      )
+                    )}
                   </select>
                 </div>
               </div>
 
+              {/* Date */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Date *</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Date{" "}
+                  <span className="text-red-500">
+                    *
+                  </span>
+                </label>
+
                 <input
                   type="date"
                   value={addForm.blocked_date}
-                  onChange={(e) => setAddForm({ ...addForm, blocked_date: e.target.value })}
-                  min={new Date().toISOString().split("T")[0]}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                  onChange={(e) =>
+                    setAddForm({
+                      ...addForm,
+                      blocked_date:
+                        e.target.value,
+                    })
+                  }
+                  min={getLocalDateString()}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Time */}
+              <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Start Time *</label>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Start time{" "}
+                    <span className="text-red-500">
+                      *
+                    </span>
+                  </label>
+
                   <input
                     type="time"
                     value={addForm.start_time}
-                    onChange={(e) => setAddForm({ ...addForm, start_time: e.target.value })}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                    onChange={(e) =>
+                      setAddForm({
+                        ...addForm,
+                        start_time:
+                          e.target.value,
+                      })
+                    }
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">End Time *</label>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    End time{" "}
+                    <span className="text-red-500">
+                      *
+                    </span>
+                  </label>
+
                   <input
                     type="time"
                     value={addForm.end_time}
-                    onChange={(e) => setAddForm({ ...addForm, end_time: e.target.value })}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                    onChange={(e) =>
+                      setAddForm({
+                        ...addForm,
+                        end_time:
+                          e.target.value,
+                      })
+                    }
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
                     required
                   />
                 </div>
               </div>
 
+              {/* Customer */}
+              <div className="border-t border-gray-100 pt-6">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Customer details
+                </h3>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Optional, but useful for keeping
+                  reservations organized.
+                </p>
+
+                <div className="mt-4 grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Customer name
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        addForm.customer_name
+                      }
+                      onChange={(e) =>
+                        setAddForm({
+                          ...addForm,
+                          customer_name:
+                            e.target.value,
+                        })
+                      }
+                      placeholder="Customer name"
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Phone
+                    </label>
+
+                    <input
+                      type="tel"
+                      value={
+                        addForm.customer_phone
+                      }
+                      onChange={(e) =>
+                        setAddForm({
+                          ...addForm,
+                          customer_phone:
+                            e.target.value,
+                        })
+                      }
+                      placeholder="+971..."
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Note */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Reason</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Note
+                </label>
+
                 <input
                   type="text"
                   value={addForm.reason}
-                  onChange={(e) => setAddForm({ ...addForm, reason: e.target.value })}
-                  placeholder="e.g., Walk-in, Phone booking"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                  onChange={(e) =>
+                    setAddForm({
+                      ...addForm,
+                      reason:
+                        e.target.value,
+                    })
+                  }
+                  placeholder="e.g. WhatsApp booking, walk-in"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
                 />
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name</label>
-                  <input
-                    type="text"
-                    value={addForm.customer_name}
-                    onChange={(e) => setAddForm({ ...addForm, customer_name: e.target.value })}
-                    placeholder="Customer name"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Phone</label>
-                  <input
-                    type="tel"
-                    value={addForm.customer_phone}
-                    onChange={(e) => setAddForm({ ...addForm, customer_phone: e.target.value })}
-                    placeholder="+971 50 123 4567"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-gradient-to-r from-orange-600 to-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
-                >
-                  Add Booking
-                </button>
+              {/* Actions */}
+              <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-6 py-3 rounded-xl border-2 border-gray-300 font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+                  onClick={closeAddModal}
+                  className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
                   Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add booking
                 </button>
               </div>
             </form>
@@ -819,41 +1232,73 @@ export default function SalonBookingsPage() {
   );
 }
 
-function StatCard({
-  title,
-  value,
-  icon,
-  tone = "default",
+function TabButton({
+  active,
+  onClick,
+  label,
+  count,
 }: {
-  title: string;
-  value: number;
-  icon: string;
-  tone?: "default" | "yellow" | "blue" | "green" | "orange";
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
 }) {
-  const colorClass =
-    tone === "yellow"
-      ? "from-yellow-400 to-orange-400"
-      : tone === "blue"
-      ? "from-blue-400 to-purple-400"
-      : tone === "green"
-      ? "from-green-400 to-emerald-400"
-      : tone === "orange"
-      ? "from-orange-400 to-red-400"
-      : "from-gray-400 to-gray-500";
-
   return (
-    <div className="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-lg">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-sm font-semibold text-gray-500 mb-2">{title}</div>
-          <div className="text-3xl font-bold text-gray-900 group-hover:scale-105 transition-transform">
-            {value}
-          </div>
-        </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative whitespace-nowrap pb-3 text-sm font-medium transition ${
+        active
+          ? "text-primary-700"
+          : "text-gray-500 hover:text-gray-800"
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        {label}
 
-        <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${colorClass} shadow-md group-hover:scale-110 transition-transform`}>
-          <span className="text-3xl">{icon}</span>
-        </div>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs ${
+            active
+              ? "bg-primary-50 text-primary-700"
+              : "bg-gray-100 text-gray-500"
+          }`}
+        >
+          {count}
+        </span>
+      </span>
+
+      {active && (
+        <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary-600" />
+      )}
+    </button>
+  );
+}
+
+function BookingInfo({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs text-gray-400">
+        {label}
+      </p>
+
+      <div className="mt-1 flex items-center gap-1.5 text-sm font-medium text-gray-800">
+        {icon && (
+          <span className="shrink-0 text-gray-400">
+            {icon}
+          </span>
+        )}
+
+        <span className="truncate">
+          {value}
+        </span>
       </div>
     </div>
   );
