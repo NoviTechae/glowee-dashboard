@@ -12,8 +12,9 @@ import {
   Award,
   Star,
   BarChart3,
-  Store,
   MapPin,
+  MessageSquareMore,
+User
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -106,13 +107,19 @@ const salonSections = [
       {
         label: "Profile",
         href: "/salon/profile",
-        icon: Store,
+        icon: User,
       },
       {
-        label: "Branches",
+        label: "Locations",
         href: "/salon/branches",
         icon: MapPin,
       },
+      {
+        label: "Feedback",
+        href: "/salon/feedback",
+        icon: MessageSquareMore,
+      },
+
     ],
   },
 ];
