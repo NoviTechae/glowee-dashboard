@@ -14,7 +14,7 @@ import {
   BarChart3,
   MapPin,
   MessageSquareMore,
-User
+  User
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -32,6 +32,7 @@ const adminMenuItems = [
   { label: "Bookings", href: "/admin/bookings" },
   { label: "Gifts", href: "/admin/gifts" },
   { label: "Feedback", href: "/admin/feedback" },
+  { label: "Partner Feedback", href: "/admin/partner-feedback" },
   { label: "Gift Themes", href: "/admin/gifts/themes" },
   { label: "Notifications", href: "/admin/notifications" },
   { label: "Payments", href: "/admin/payments" },
