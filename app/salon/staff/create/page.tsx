@@ -4,7 +4,24 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { branchApi, serviceApi, staffApi, salonApi } from "@/lib/api";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  Home,
+  Info,
+  MapPin,
+  Plus,
+  Scissors,
+  UserRound,
+} from "lucide-react";
+
+import {
+  branchApi,
+  serviceApi,
+  staffApi,
+  salonApi,
+} from "@/lib/api";
 
 type Branch = {
   id: string;
@@ -17,16 +34,12 @@ type Service = {
   category_name?: string | null;
 };
 
-type SalonMe = {
-  id: string;
-  name: string;
-  salon_type?: "in_salon" | "home" | "both";
-};
-
 export default function CreateStaffPage() {
   const router = useRouter();
 
-  const [salonType, setSalonType] = useState<"in_salon" | "home" | "both" | null>(null);
+  const [salonType, setSalonType] = useState<
+    "in_salon" | "home" | "both" | null
+  >(null);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -40,18 +53,25 @@ export default function CreateStaffPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const isHomeSalon = salonType === "home";
 
   const groupedServices = useMemo(() => {
     const map = new Map<string, Service[]>();
-    for (const s of services) {
-      const key = s.category_name || "Other";
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(s);
+
+    for (const service of services) {
+      const category = service.category_name || "Other";
+
+      if (!map.has(category)) {
+        map.set(category, []);
+      }
+
+      map.get(category)!.push(service);
     }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+    return Array.from(map.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    );
   }, [services]);
 
   useEffect(() => {
@@ -59,24 +79,29 @@ export default function CreateStaffPage() {
       try {
         setLoading(true);
         setErr(null);
-        setSuccess(null);
 
-        const [meRes, bRes, sRes] = await Promise.all([
+        const [meRes, branchesRes, servicesRes] = await Promise.all([
           salonApi.getMe(),
           branchApi.getAll(),
           serviceApi.getAll(),
         ]);
 
         const me = meRes?.salon || meRes?.data || null;
-        const b = Array.isArray(bRes.data) ? bRes.data : [];
-        const s = Array.isArray(sRes.data) ? sRes.data : [];
+
+        const loadedBranches = Array.isArray(branchesRes.data)
+          ? branchesRes.data
+          : [];
+
+        const loadedServices = Array.isArray(servicesRes.data)
+          ? servicesRes.data
+          : [];
 
         setSalonType(me?.salon_type ?? null);
-        setBranches(b);
-        setServices(s);
+        setBranches(loadedBranches);
+        setServices(loadedServices);
 
-        if (b.length > 0) {
-          setBranchId(b[0].id);
+        if (loadedBranches.length > 0) {
+          setBranchId(loadedBranches[0].id);
         }
       } catch (e: any) {
         setErr(e?.message || "Failed to load form data");
@@ -88,27 +113,36 @@ export default function CreateStaffPage() {
     load();
   }, []);
 
+  function toggleService(serviceId: string) {
+    setSelectedServiceIds((prev) =>
+      prev.includes(serviceId)
+        ? prev.filter((id) => id !== serviceId)
+        : [...prev, serviceId]
+    );
+
+    setErr(null);
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
-    setSuccess(null);
 
     if (name.trim().length < 2) {
-      setErr(isHomeSalon ? "Provider name is too short" : "Staff name is too short");
+      setErr("Please enter a valid team member name");
       return;
     }
 
     if (!branchId) {
       setErr(
         isHomeSalon
-          ? "No internal home-service record found. Please contact admin."
-          : "Please select a branch"
+          ? "Your home-service location is not set up yet. Please contact support."
+          : "Please select a location"
       );
       return;
     }
 
     if (selectedServiceIds.length === 0) {
-      setErr("Pick at least one service");
+      setErr("Select at least one service");
       return;
     }
 
@@ -123,16 +157,20 @@ export default function CreateStaffPage() {
       });
 
       const staffId = created?.staff?.id || created?.data?.id;
-      if (!staffId) throw new Error("Staff create failed");
 
-      await staffApi.updateServices(staffId, selectedServiceIds);
+      if (!staffId) {
+        throw new Error("Team member could not be created");
+      }
 
-      setSuccess(isHomeSalon ? "Provider created successfully" : "Staff created successfully");
+      await staffApi.updateServices(
+        staffId,
+        selectedServiceIds
+      );
 
       router.push("/salon/staff");
       router.refresh();
     } catch (e: any) {
-      setErr(e?.message || "Failed to create");
+      setErr(e?.message || "Failed to create team member");
     } finally {
       setSaving(false);
     }
@@ -140,259 +178,330 @@ export default function CreateStaffPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
+      <div className="flex min-h-[420px] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-purple-600" />
-          <p className="mt-4 text-gray-600">Loading form...</p>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+
+          <p className="mt-4 text-sm text-gray-500">
+            Loading...
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto max-w-4xl space-y-7 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-3xl font-bold text-transparent">
-            {isHomeSalon ? "Add Provider" : "Add Staff"}
-          </h1>
-          <p className="mt-2 text-sm text-gray-500">
-            {isHomeSalon
-              ? "Create a home-service provider and assign services"
-              : "Create a new staff member and assign services"}
-          </p>
-        </div>
-
+      <div>
         <Link
           href="/salon/staff"
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800"
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back
+          <ArrowLeft className="h-4 w-4" />
+          Back to team
         </Link>
+
+        <div className="mt-5">
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+            Add team member
+          </h1>
+
+          <p className="mt-1.5 text-sm text-gray-500">
+            Add a team member and choose the services they can provide.
+          </p>
+        </div>
       </div>
 
-      {/* Messages */}
+      {/* Error */}
       {err && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <div className="flex items-center gap-3">
-            <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium text-red-700">{err}</span>
-          </div>
-        </div>
-      )}
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
 
-      {success && (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-          <div className="flex items-center gap-3">
-            <svg className="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium text-green-700">{success}</span>
+          <div>
+            <p className="text-sm font-medium text-red-800">
+              Something went wrong
+            </p>
+
+            <p className="mt-0.5 text-sm text-red-600">
+              {err}
+            </p>
           </div>
         </div>
       )}
 
       <form onSubmit={onSubmit} className="space-y-6">
-        {/* Basic Info */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6 flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
-              <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9 9 0 1118.88 17.8M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+        {/* Member details */}
+        <section className="rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                <UserRound className="h-5 w-5" />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Team member details
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Add their basic information and location.
+                </p>
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-gray-900">
-              {isHomeSalon ? "Provider Details" : "Staff Details"}
-            </h2>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                {isHomeSalon ? "Provider Name *" : "Staff Name *"}
-              </label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-                placeholder={isHomeSalon ? "e.g. Sara Home Beauty" : "e.g. Sara"}
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Phone
-              </label>
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-                placeholder="+971..."
-              />
-            </div>
-
-            {!isHomeSalon && (
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  Branch *
+          <div className="space-y-6 p-6">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {/* Name */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Name <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={branchId}
-                  onChange={(e) => setBranchId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="">Select branch</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
 
-            {isHomeSalon && (
-              <div className="md:col-span-2">
-                <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-purple-700">🏠</div>
-                    <div>
-                      <p className="font-semibold text-purple-900">Home Service Provider</p>
-                      <p className="mt-1 text-sm text-purple-700">
-                        This provider will be linked automatically to your internal home-service setup.
-                      </p>
-                    </div>
-                  </div>
+                <input
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setErr(null);
+                  }}
+                  placeholder="e.g. Sara"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Phone
+                </label>
+
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+971..."
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+            </div>
+
+            {/* Location */}
+            {!isHomeSalon ? (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Location <span className="text-red-500">*</span>
+                </label>
+
+                <div className="relative">
+                  <MapPin className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+                  <select
+                    value={branchId}
+                    onChange={(e) => {
+                      setBranchId(e.target.value);
+                      setErr(null);
+                    }}
+                    className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-700 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+                  >
+                    <option value="">Select location</option>
+
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            )}
+            ) : (
+              <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <Home className="mt-0.5 h-5 w-5 shrink-0 text-primary-600" />
 
-            <div className="md:col-span-2">
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-green-200 bg-green-50 p-4 transition-colors hover:bg-green-100">
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="h-5 w-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                />
                 <div>
-                  <span className="font-semibold text-green-900">Active</span>
-                  <p className="mt-1 text-xs text-green-700">
-                    {isHomeSalon
-                      ? "Provider is available for home-service bookings"
-                      : "Staff member is available for assignment and bookings"}
+                  <p className="text-sm font-medium text-gray-800">
+                    Home service
+                  </p>
+
+                  <p className="mt-0.5 text-sm text-gray-500">
+                    This team member will automatically use your home-service
+                    setup.
                   </p>
                 </div>
-              </label>
+              </div>
+            )}
+
+            {/* Status */}
+            <div className="flex items-center justify-between gap-6 rounded-xl border border-gray-200 px-4 py-4">
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  Active
+                </p>
+
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Active team members can be assigned to bookings.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isActive}
+                onClick={() => setIsActive((value) => !value)}
+                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition ${
+                  isActive ? "bg-primary-600" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition ${
+                    isActive
+                      ? "translate-x-[22px] translate-y-0.5"
+                      : "translate-x-0.5 translate-y-0.5"
+                  }`}
+                />
+              </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Assign Services */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6 flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-500">
-              <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a4 4 0 00-5.656 0M14 10a2 2 0 11-4 0 2 2 0 014 0M12 2a10 10 0 100 20 10 10 0 000-20z" />
-              </svg>
+        {/* Services */}
+        <section className="rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                <Scissors className="h-5 w-5" />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Services
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Select the services this team member can provide.
+                </p>
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-gray-900">Assign Services *</h2>
           </div>
 
-          {services.length === 0 ? (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm font-semibold text-gray-500">
-              No services yet
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {groupedServices.map(([cat, list]) => (
-                <div key={cat} className="rounded-xl border border-gray-200 p-4">
-                  <div className="mb-3 font-bold text-gray-900">{cat}</div>
+          <div className="p-6">
+            {services.length === 0 ? (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-6 text-center">
+                <Scissors className="mx-auto h-5 w-5 text-gray-400" />
 
-                  <div className="flex flex-wrap gap-2">
-                    {list.map((s) => {
-                      const active = selectedServiceIds.includes(s.id);
+                <p className="mt-2 text-sm font-medium text-gray-700">
+                  No services available
+                </p>
 
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() =>
-                            setSelectedServiceIds((prev) =>
-                              active ? prev.filter((x) => x !== s.id) : [...prev, s.id]
-                            )
-                          }
-                          className={`rounded-full border px-4 py-2 text-sm font-bold transition-all ${
-                            active
-                              ? "border-pink-300 bg-pink-50 text-pink-700"
-                              : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50"
-                          }`}
-                        >
-                          {s.name}
-                        </button>
-                      );
-                    })}
+                <p className="mt-1 text-xs text-gray-500">
+                  Add services before creating a team member.
+                </p>
+
+                <Link
+                  href="/salon/services/create"
+                  className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add service
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {groupedServices.map(([category, list]) => (
+                  <div key={category}>
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      {category}
+                    </p>
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {list.map((service) => {
+                        const selected =
+                          selectedServiceIds.includes(service.id);
+
+                        return (
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => toggleService(service.id)}
+                            className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                              selected
+                                ? "border-primary-200 bg-primary-50"
+                                : "border-gray-200 bg-white hover:bg-gray-50"
+                            }`}
+                          >
+                            <span
+                              className={`text-sm font-medium ${
+                                selected
+                                  ? "text-primary-800"
+                                  : "text-gray-700"
+                              }`}
+                            >
+                              {service.name}
+                            </span>
+
+                            <span
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                                selected
+                                  ? "border-primary-600 bg-primary-600 text-white"
+                                  : "border-gray-300 bg-white"
+                              }`}
+                            >
+                              {selected && (
+                                <Check className="h-3.5 w-3.5" />
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
 
-        {/* Info Note */}
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
-          <div className="flex items-start gap-3">
-            <svg className="mt-0.5 h-6 w-6 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <h3 className="mb-1 font-bold text-blue-900">Note</h3>
-              <p className="text-sm text-blue-700">
-                {isHomeSalon
-                  ? "Each provider must be assigned to at least one service so they can be used in home-service bookings."
-                  : "Each staff member must be assigned to at least one service so they can appear in availability and booking flows."}
-              </p>
-            </div>
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="text-xs text-gray-500">
+                    {selectedServiceIds.length === 0
+                      ? "Select at least one service."
+                      : `${selectedServiceIds.length} ${
+                          selectedServiceIds.length === 1
+                            ? "service"
+                            : "services"
+                        } selected.`}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
+        </section>
+
+        {/* Helper */}
+        <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+
+          <p className="text-sm text-gray-500">
+            Team members must have at least one service assigned so Glowee can
+            use them in availability and booking flows.
+          </p>
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={() => router.push("/salon/staff")}
-            className="flex-1 rounded-xl border border-gray-300 px-4 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            disabled={saving}
+            className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
           >
             Cancel
           </button>
 
           <button
             type="submit"
-            disabled={saving}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-3 font-medium text-white shadow-lg transition-all hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={saving || services.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? (
-              <>
-                <svg className="h-5 w-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Creating...
-              </>
-            ) : (
-              <>
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                {isHomeSalon ? "Create Provider" : "Create Staff"}
-              </>
-            )}
+            <Plus className="h-4 w-4" />
+
+            {saving ? "Creating..." : "Add team member"}
           </button>
         </div>
       </form>
