@@ -3,14 +3,24 @@
 //   1. Removed debug block (process.env.NODE_ENV check + JSON.stringify pre)
 //   2. Removed console.log("📊 Stats API Response:", data)
 //   3. Switched raw api.get("/dashboard/admin/stats") → statsApi.getDashboard()
-
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  House,
+  RefreshCw,
+  Users,
+  XCircle,
+} from "lucide-react";
+
 import { Card } from "@/app/components/ui/Card";
 import { Loading } from "@/app/components/ui/Loading";
-import { statsApi } from "@/lib/api";
-import Link from "next/link";
+import { adminBookingApi, statsApi } from "@/lib/api";
 
 interface AdminStats {
   salons: {
@@ -33,71 +43,82 @@ interface AdminStats {
   };
 }
 
+interface BookingStats {
+  total: number;
+  pending: number;
+  confirmed: number;
+  completed: number;
+  cancelled: number;
+  today: number;
+  thisMonth: number;
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [bookingStats, setBookingStats] = useState<BookingStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-useEffect(() => {
-  let mounted = true;
-
-  const run = async () => {
+  const loadData = async () => {
     try {
       setError(null);
-      const data = await statsApi.getDashboard();
-      if (!mounted) return;
-      setStats(data);
+      setLoading(true);
+
+      const [dashboardData, bookingData] = await Promise.all([
+        statsApi.getDashboard(),
+        adminBookingApi.getStats(),
+      ]);
+
+      setStats(dashboardData);
+      setBookingStats(bookingData);
     } catch (error: any) {
-      if (!mounted) return;
-      setError(error.message || "Failed to load statistics");
-    } finally {
-      if (!mounted) return;
-      setLoading(false);
-    }
-  };
-
-  run();
-
-  return () => {
-    mounted = false;
-  };
-}, []);
-
-  const loadStats = async () => {
-    try {
-      setError(null);
-      const data = await statsApi.getDashboard();
-      setStats(data);
-    } catch (error: any) {
-      setError(error.message || "Failed to load statistics");
+      setError(error.message || "Failed to load dashboard");
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) return <Loading size="lg" />;
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  if (loading) {
+    return <Loading size="lg" />;
+  }
 
   if (error) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto max-w-7xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600">Welcome to Glowee Admin Dashboard</p>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Admin Dashboard
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Platform overview and operational activity.
+          </p>
         </div>
+
         <Card>
-          <div className="text-center py-12">
-            <div className="text-red-500 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+          <div className="flex flex-col items-center justify-center py-14 text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+              <XCircle className="h-6 w-6 text-red-500" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Stats</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
+
+            <h2 className="text-base font-semibold text-gray-900">
+              Unable to load dashboard
+            </h2>
+
+            <p className="mt-1 max-w-md text-sm text-gray-500">
+              {error}
+            </p>
+
             <button
-              onClick={loadStats}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              type="button"
+              onClick={loadData}
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
             >
-              Retry
+              <RefreshCw className="h-4 w-4" />
+              Try again
             </button>
           </div>
         </Card>
@@ -105,239 +126,246 @@ useEffect(() => {
     );
   }
 
+  const totalBusinesses = stats?.salons.total || 0;
+  const activeBusinesses = stats?.salons.active || 0;
+  const totalUsers = stats?.users?.total || 0;
+  const totalBookings = bookingStats?.total || 0;
+
+  const businessTypes = [
+    {
+      label: "In-salon",
+      value: stats?.types.in_salon || 0,
+      icon: Building2,
+    },
+    {
+      label: "Home service",
+      value: stats?.types.home || 0,
+      icon: House,
+    },
+    {
+      label: "Both",
+      value: stats?.types.both || 0,
+      icon: RefreshCw,
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-gray-600">Welcome to Glowee Admin Dashboard</p>
+    <div className="mx-auto max-w-7xl space-y-7">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-sm font-medium text-primary-600">
+            Glowee platform
+          </p>
+
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+            Admin Dashboard
+          </h1>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Monitor businesses, users and booking activity from one place.
+          </p>
+        </div>
+
+        <Link
+          href="/admin/bookings"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+        >
+          <CalendarDays className="h-4 w-4" />
+          View bookings
+        </Link>
       </div>
 
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Main KPIs */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
-          <div className="space-y-2">
-            <p className="text-sm text-gray-600">Total Salons</p>
-            <p className="text-3xl font-bold text-gray-900">
-              {stats?.salons?.total || 0}
-            </p>
-            <p className="text-xs text-green-600">
-              {stats?.salons?.active || 0} active
-            </p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="space-y-2">
-            <p className="text-sm text-gray-600">Total Users</p>
-            <p className="text-3xl font-bold text-gray-900">
-              {stats?.users?.total || 0}
-            </p>
-            <p className="text-xs text-green-600">
-              {stats?.users?.active || 0} active
-            </p>
-            {!stats?.users && (
-              <p className="text-xs text-gray-400">No user data available</p>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="space-y-2">
-            <p className="text-sm text-gray-600">Total Bookings</p>
-            <p className="text-3xl font-bold text-gray-900">
-              {stats?.bookings?.total || 0}
-            </p>
-            <p className="text-xs text-blue-600">
-              {stats?.bookings?.today || 0} today
-            </p>
-            {!stats?.bookings && (
-              <p className="text-xs text-gray-400">No booking data available</p>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="space-y-2">
-            <p className="text-sm text-gray-600">This Month</p>
-            <p className="text-3xl font-bold text-primary-600">
-              {stats?.bookings?.thisMonth || 0}
-            </p>
-            <p className="text-xs text-gray-500">bookings</p>
-          </div>
-        </Card>
-      </div>
-
-      {/* Salon Types Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">In-Salon</p>
-              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-semibold">
-                Salons
-              </span>
-            </div>
-            <p className="text-3xl font-bold text-blue-600">
-              {stats?.types?.in_salon || 0}
-            </p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">Home Service</p>
-              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-semibold">
-                Salons
-              </span>
-            </div>
-            <p className="text-3xl font-bold text-purple-600">
-              {stats?.types?.home || 0}
-            </p>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">Both Services</p>
-              <span className="text-xs bg-pink-100 text-pink-700 px-2 py-1 rounded-full font-semibold">
-                Salons
-              </span>
-            </div>
-            <p className="text-3xl font-bold text-pink-600">
-              {stats?.types?.both || 0}
-            </p>
-          </div>
-        </Card>
-      </div>
-
-      {/* Quick Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card title="Salon Overview">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Total Salons</span>
-              <span className="font-semibold text-lg">
-                {stats?.salons?.total || 0}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Active Salons</span>
-              <span className="font-semibold text-lg text-green-600">
-                {stats?.salons?.active || 0}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Inactive Salons</span>
-              <span className="font-semibold text-lg text-gray-400">
-                {(stats?.salons?.total || 0) - (stats?.salons?.active || 0)}
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        {stats?.users ? (
-          <Card title="User Overview">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Total Users</span>
-                <span className="font-semibold text-lg">{stats.users.total}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Active Users</span>
-                <span className="font-semibold text-lg text-green-600">
-                  {stats.users.active}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Activity Rate</span>
-                <span className="font-semibold text-lg text-blue-600">
-                  {stats.users.total > 0
-                    ? Math.round((stats.users.active / stats.users.total) * 100)
-                    : 0}%
-                </span>
-              </div>
-            </div>
-          </Card>
-        ) : (
-          <Card title="Users">
-            <div className="text-center py-8">
-              <div className="text-gray-400 mb-3">
-                <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <p className="text-sm text-gray-500 mb-1">No user data available</p>
-              <p className="text-xs text-gray-400">
-                Users table may not exist yet or no users registered
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Businesses</p>
+              <p className="mt-2 text-3xl font-semibold text-gray-900">
+                {totalBusinesses}
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                {activeBusinesses} active
               </p>
             </div>
-          </Card>
-        )}
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+              <Building2 className="h-5 w-5 text-primary-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Users</p>
+              <p className="mt-2 text-3xl font-semibold text-gray-900">
+                {totalUsers}
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                {stats?.users?.active || 0} active
+              </p>
+            </div>
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+              <Users className="h-5 w-5 text-primary-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Bookings</p>
+              <p className="mt-2 text-3xl font-semibold text-gray-900">
+                {totalBookings}
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                {bookingStats?.today || 0} today
+              </p>
+            </div>
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+              <CalendarDays className="h-5 w-5 text-primary-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-gray-500">This month</p>
+              <p className="mt-2 text-3xl font-semibold text-gray-900">
+                {bookingStats?.thisMonth || 0}
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                bookings scheduled
+              </p>
+            </div>
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+              <Clock3 className="h-5 w-5 text-primary-600" />
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Bookings Overview */}
-      {stats?.bookings ? (
-        <Card title="Booking Overview">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900">{stats.bookings.total}</p>
-              <p className="text-sm text-gray-600">Total Bookings</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600">{stats.bookings.today}</p>
-              <p className="text-sm text-gray-600">Today</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">{stats.bookings.thisMonth}</p>
-              <p className="text-sm text-gray-600">This Month</p>
-            </div>
-          </div>
-        </Card>
-      ) : (
-        <Card title="Bookings">
-          <div className="text-center py-8">
-            <div className="text-gray-400 mb-3">
-              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <p className="text-sm text-gray-500 mb-1">No booking data available</p>
-            <p className="text-xs text-gray-400">
-              Bookings table may not exist yet or no bookings made
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {/* No Data State */}
-      {stats && stats.salons.total === 0 && (
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {/* Business Mix */}
         <Card>
-          <div className="text-center py-12">
-            <svg
-              className="w-16 h-16 text-gray-400 mx-auto mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-              />
-            </svg>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Salons Yet</h3>
-            <p className="text-gray-600 mb-4">
-              Get started by adding your first salon to the platform
+          <div className="border-b border-gray-100 pb-4">
+            <h2 className="text-base font-semibold text-gray-900">
+              Business mix
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Active businesses by service type.
             </p>
-<Link
-  href="/admin/salons/create"
-  className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
->
-  Add First Salon
-</Link>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {businessTypes.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50">
+                      <Icon className="h-4 w-4 text-gray-500" />
+                    </div>
+
+                    <span className="text-sm font-medium text-gray-700">
+                      {item.label}
+                    </span>
+                  </div>
+
+                  <span className="text-lg font-semibold text-gray-900">
+                    {item.value}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* Booking Activity */}
+        <Card>
+          <div className="border-b border-gray-100 pb-4">
+            <h2 className="text-base font-semibold text-gray-900">
+              Booking activity
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Current booking status across Glowee.
+            </p>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-gray-100 p-4">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Clock3 className="h-4 w-4" />
+                Pending
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">
+                {bookingStats?.pending || 0}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 p-4">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <CheckCircle2 className="h-4 w-4" />
+                Confirmed
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">
+                {bookingStats?.confirmed || 0}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 p-4">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <CheckCircle2 className="h-4 w-4" />
+                Completed
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">
+                {bookingStats?.completed || 0}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 p-4">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <XCircle className="h-4 w-4" />
+                Cancelled
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">
+                {bookingStats?.cancelled || 0}
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {totalBusinesses === 0 && (
+        <Card>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
+              <Building2 className="h-6 w-6 text-primary-600" />
+            </div>
+
+            <h2 className="mt-4 text-base font-semibold text-gray-900">
+              No businesses yet
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Add your first business to start managing it through Glowee.
+            </p>
+
+            <Link
+              href="/admin/salons/create"
+              className="mt-5 inline-flex rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+            >
+              Add business
+            </Link>
           </div>
         </Card>
       )}

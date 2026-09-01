@@ -240,6 +240,10 @@ export const statsApi = {
   getSalonStats: () => api.get("/dashboard/salon/stats"),
 };
 
+export const adminBookingApi = {
+  getStats: () => api.get("/dashboard/admin/bookings/stats"),
+};
+
 // ========== SALON OWNER - PROFILE API ==========
 export const salonProfileApi = {
   get: () => api.get("/dashboard/salon/me"),
