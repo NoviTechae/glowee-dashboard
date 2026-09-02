@@ -227,52 +227,52 @@ const salonSections = [
 export function Sidebar({ role }: SidebarProps) {
   const pathname = usePathname();
 
- if (role === "admin") {
-  return (
-    <aside className="fixed left-0 top-0 min-h-screen w-64 border-r border-gray-200 bg-white pt-16">
-      <nav className="space-y-6 px-4 py-5">
-        {adminSections.map((section) => (
-          <div key={section.title}>
-            <p className="mb-2 px-3 text-[11px] font-semibold tracking-[0.14em] text-gray-400">
-              {section.title}
-            </p>
+  if (role === "admin") {
+    return (
+      <aside className="fixed bottom-0 left-0 top-16 w-64 overflow-y-auto border-r border-gray-200 bg-white">
+        <nav className="space-y-6 px-4 py-5 pb-8">
+          {adminSections.map((section) => (
+            <div key={section.title}>
+              <p className="mb-2 px-3 text-[11px] font-semibold tracking-[0.14em] text-gray-400">
+                {section.title}
+              </p>
 
-            <div className="space-y-1">
-              {section.items.map((item) => {
-                const Icon = item.icon;
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
 
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/admin" &&
-                    pathname.startsWith(item.href + "/"));
+                  const isActive =
+                    pathname === item.href ||
+                    (item.href !== "/admin" &&
+                      pathname.startsWith(item.href + "/"));
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
-                      isActive
-                        ? "bg-primary-50 font-medium text-primary-700"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                    )}
-                  >
-                    <Icon className="h-[18px] w-[18px] shrink-0" />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
+                        isActive
+                          ? "bg-primary-50 font-medium text-primary-700"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      )}
+                    >
+                      <Icon className="h-[18px] w-[18px] shrink-0" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </nav>
-    </aside>
-  );
-}
+          ))}
+        </nav>
+      </aside>
+    );
+  }
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen fixed left-0 top-0 pt-16">
-      <nav className="px-4 py-5 space-y-6">
+    <aside className="fixed bottom-0 left-0 top-16 w-64 overflow-y-auto border-r border-gray-200 bg-white">
+      <nav className="space-y-6 px-4 py-5 pb-8">
         {salonSections.map((section) => (
           <div key={section.title}>
             <p className="px-3 mb-2 text-[11px] font-semibold tracking-[0.14em] text-gray-400">
