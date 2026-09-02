@@ -1,6 +1,18 @@
+// app/admin/notifications/page.tsx
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  Bell,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  Send,
+  Sparkles,
+  Users,
+} from "lucide-react";
+import { toast } from "sonner";
+
 import { notificationApi } from "@/lib/api";
 
 type TargetType = "all" | "specific_user" | "user_segment";
@@ -27,7 +39,7 @@ const NOTIFICATION_TEMPLATES = [
   },
   {
     key: "launch",
-    label: "Launch Announcement",
+    label: "Launch announcement",
     title: "Glowee is here ✨",
     body: "Book. Gift. Earn. Everything in one place.",
     type: "announcement",
@@ -41,21 +53,21 @@ const NOTIFICATION_TEMPLATES = [
   },
   {
     key: "gift_received",
-    label: "Gift Received",
+    label: "Gift received",
     title: "You received a gift 🎁",
     body: "Open Glowee to view your gift and claim it.",
     type: "gift_received",
   },
   {
     key: "booking_reminder",
-    label: "Booking Reminder",
+    label: "Booking reminder",
     title: "Appointment reminder ⏰",
     body: "Your appointment is coming up soon. Check Glowee for details.",
     type: "reminder",
   },
   {
     key: "booking_confirmed",
-    label: "Booking Confirmed",
+    label: "Booking confirmed",
     title: "Booking confirmed ✅",
     body: "Your appointment has been confirmed. See you soon!",
     type: "booking_confirmed",
@@ -64,11 +76,11 @@ const NOTIFICATION_TEMPLATES = [
 
 const SEGMENTS = [
   { value: "", label: "Select segment" },
-  { value: "active_users", label: "Active Users (last 7 days)" },
-  { value: "inactive_users", label: "Inactive Users (30+ days)" },
-  { value: "with_bookings", label: "Users with Bookings" },
-  { value: "with_gifts", label: "Users with Gifts" },
-  { value: "with_streak", label: "Users with Streak" },
+  { value: "active_users", label: "Active users · last 7 days" },
+  { value: "inactive_users", label: "Inactive users · 30+ days" },
+  { value: "with_bookings", label: "Users with bookings" },
+  { value: "with_gifts", label: "Users with gifts" },
+  { value: "with_streak", label: "Users with streak" },
 ];
 
 const TYPES = [
@@ -76,469 +88,840 @@ const TYPES = [
   { value: "promotion", label: "Promotion" },
   { value: "reminder", label: "Reminder" },
   { value: "announcement", label: "Announcement" },
-  { value: "gift_received", label: "Gift Received" },
-  { value: "booking_confirmed", label: "Booking Confirmed" },
-  { value: "booking_cancelled", label: "Booking Cancelled" },
+  { value: "gift_received", label: "Gift received" },
+  { value: "booking_confirmed", label: "Booking confirmed" },
+  { value: "booking_cancelled", label: "Booking cancelled" },
 ];
 
 const TITLE_LIMIT = 60;
 const BODY_LIMIT = 160;
 
+const EMPTY_FORM: FormState = {
+  title: "",
+  body: "",
+  targetType: "all",
+  userId: "",
+  segment: "",
+  type: "general",
+  deepLink: "",
+  imageUrl: "",
+  promoCode: "",
+};
+
 function buildTargetLabel(form: FormState) {
-  if (form.targetType === "all") return "All users";
-  if (form.targetType === "specific_user") return form.userId ? `User #${form.userId}` : "Specific user";
-  return form.segment || "User segment";
+  if (form.targetType === "all") return "All Glowee users";
+
+  if (form.targetType === "specific_user") {
+    return form.userId
+      ? `User #${form.userId}`
+      : "Specific user";
+  }
+
+  const segment = SEGMENTS.find(
+    (item) => item.value === form.segment
+  );
+
+  return segment?.label || "User segment";
 }
 
 function buildDataPayload(form: FormState) {
-  const payload: Record<string, any> = {};
+  const payload: Record<string, string> = {};
 
-  if (form.deepLink.trim()) payload.deep_link = form.deepLink.trim();
-  if (form.imageUrl.trim()) payload.image_url = form.imageUrl.trim();
-  if (form.promoCode.trim()) payload.promo_code = form.promoCode.trim();
+  if (form.deepLink.trim()) {
+    payload.deep_link = form.deepLink.trim();
+  }
 
-  return Object.keys(payload).length ? payload : undefined;
+  if (form.imageUrl.trim()) {
+    payload.image_url = form.imageUrl.trim();
+  }
+
+  if (form.promoCode.trim()) {
+    payload.promo_code = form.promoCode.trim();
+  }
+
+  return Object.keys(payload).length
+    ? payload
+    : undefined;
 }
 
 export default function NotificationsPage() {
-  const [loading, setLoading] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState("custom");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [form, setForm] = useState<FormState>({
-    title: "",
-    body: "",
-    targetType: "all",
-    userId: "",
-    segment: "",
-    type: "general",
-    deepLink: "",
-    imageUrl: "",
-    promoCode: "",
-  });
+  const [selectedTemplate, setSelectedTemplate] =
+    useState("custom");
+
+  const [showAdvanced, setShowAdvanced] =
+    useState(false);
+
+  const [form, setForm] =
+    useState<FormState>(EMPTY_FORM);
 
   const titleCount = form.title.length;
   const bodyCount = form.body.length;
 
   const validationError = useMemo(() => {
-    if (!form.title.trim()) return "Title is required.";
-    if (!form.body.trim()) return "Message is required.";
-    if (titleCount > TITLE_LIMIT) return `Title must be ${TITLE_LIMIT} characters or less.`;
-    if (bodyCount > BODY_LIMIT) return `Message must be ${BODY_LIMIT} characters or less.`;
-
-    if (form.targetType === "specific_user" && !form.userId.trim()) {
-      return "User ID is required for specific user.";
+    if (!form.title.trim()) {
+      return "Title is required.";
     }
 
-    if (form.targetType === "user_segment" && !form.segment) {
+    if (!form.body.trim()) {
+      return "Message is required.";
+    }
+
+    if (titleCount > TITLE_LIMIT) {
+      return `Title must be ${TITLE_LIMIT} characters or less.`;
+    }
+
+    if (bodyCount > BODY_LIMIT) {
+      return `Message must be ${BODY_LIMIT} characters or less.`;
+    }
+
+    if (
+      form.targetType === "specific_user" &&
+      !form.userId.trim()
+    ) {
+      return "User ID is required for a specific user.";
+    }
+
+    if (
+      form.targetType === "user_segment" &&
+      !form.segment
+    ) {
       return "Please select a user segment.";
     }
 
     return "";
   }, [form, titleCount, bodyCount]);
 
-  const canSend = !loading && !validationError;
+  const canSend =
+    !loading && !validationError;
 
-  const applyTemplate = (templateKey: string) => {
+  function resetForm() {
+    setSelectedTemplate("custom");
+    setShowAdvanced(false);
+    setForm({ ...EMPTY_FORM });
+  }
+
+  function applyTemplate(templateKey: string) {
     setSelectedTemplate(templateKey);
 
-    const template = NOTIFICATION_TEMPLATES.find((t) => t.key === templateKey);
+    const template =
+      NOTIFICATION_TEMPLATES.find(
+        (item) =>
+          item.key === templateKey
+      );
+
     if (!template) return;
 
-    setForm((prev) => ({
-      ...prev,
+    setForm((previous) => ({
+      ...previous,
       title: template.title,
       body: template.body,
       type: template.type,
     }));
-  };
+  }
 
-  const handleSend = async () => {
+  async function handleSend() {
     if (!canSend) return;
+
+    const audience =
+      buildTargetLabel(form);
+
+    const confirmed = window.confirm(
+      `Send this notification to ${audience}?`
+    );
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);
 
-      const result = await notificationApi.send({
-        title: form.title.trim(),
-        body: form.body.trim(),
-        targetType: form.targetType,
-        userId: form.userId.trim() || undefined,
-        segment: form.segment || undefined,
-        type: form.type,
-        data: buildDataPayload(form),
-      });
+      const result =
+        await notificationApi.send({
+          title: form.title.trim(),
+          body: form.body.trim(),
+          targetType:
+            form.targetType,
+          userId:
+            form.userId.trim() ||
+            undefined,
+          segment:
+            form.segment ||
+            undefined,
+          type: form.type,
+          data:
+            buildDataPayload(form),
+        });
 
-      alert(`✅ Notification sent to ${result.count} users!`);
+      toast.success(
+        `Delivered to ${result.count} Glowee inbox${
+          result.count === 1 ? "" : "es"
+        }`
+      );
 
-      setSelectedTemplate("custom");
-      setShowAdvanced(false);
-      setForm({
-        title: "",
-        body: "",
-        targetType: "all",
-        userId: "",
-        segment: "",
-        type: "general",
-        deepLink: "",
-        imageUrl: "",
-        promoCode: "",
-      });
+      resetForm();
     } catch (error: any) {
-      alert(`❌ Error: ${error.message}`);
+      toast.error(
+        error?.message ||
+          "Failed to send notification"
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
-        <p className="text-gray-500 mt-1">
-          Send push notifications to all users, one user, or a selected segment.
+        <p className="text-sm font-medium text-primary-600">
+          Content
+        </p>
+
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+          Notifications
+        </h1>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Create inbox and push notifications for Glowee customers.
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        {/* Compose */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Compose Notification</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Keep it short, clear, and action-driven.
-            </p>
-          </div>
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+        {/* Composer */}
+        <section className="rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
+                <Bell className="h-5 w-5" />
+              </div>
 
-          {/* Templates */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Quick Template
-            </label>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {NOTIFICATION_TEMPLATES.map((template) => (
-                <button
-                  key={template.key}
-                  type="button"
-                  onClick={() => applyTemplate(template.key)}
-                  className={`text-left rounded-xl border px-4 py-3 transition ${
-                    selectedTemplate === template.key
-                      ? "border-purple-500 bg-purple-50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <p className="font-medium text-sm text-gray-900">{template.label}</p>
-                  <p className="text-xs text-gray-500 mt-1">{template.type}</p>
-                </button>
-              ))}
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">
+                  Compose notification
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Choose an audience, write the message and review it before sending.
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Title */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">Title</label>
-              <span
-                className={`text-xs ${
-                  titleCount > TITLE_LIMIT ? "text-red-500" : "text-gray-400"
-                }`}
-              >
-                {titleCount}/{TITLE_LIMIT}
-              </span>
-            </div>
-            <input
-              type="text"
-              placeholder="e.g. Glowee is here ✨"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
-            />
-          </div>
-
-          {/* Body */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">Message</label>
-              <span
-                className={`text-xs ${
-                  bodyCount > BODY_LIMIT ? "text-red-500" : "text-gray-400"
-                }`}
-              >
-                {bodyCount}/{BODY_LIMIT}
-              </span>
-            </div>
-            <textarea
-              placeholder="e.g. Book. Gift. Earn. Everything in one place."
-              value={form.body}
-              onChange={(e) => setForm({ ...form, body: e.target.value })}
-              rows={4}
-              className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
-            />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Target */}
+          <div className="space-y-7 p-6">
+            {/* Templates */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Audience</label>
-              <div className="space-y-2">
-                {[
-                  { value: "all", label: "All Users" },
-                  { value: "specific_user", label: "Specific User" },
-                  { value: "user_segment", label: "User Segment" },
-                ].map((item) => (
-                  <label
-                    key={item.value}
-                    className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:bg-gray-50"
-                  >
-                    <input
-                      type="radio"
-                      value={item.value}
-                      checked={form.targetType === item.value}
-                      onChange={(e) =>
-                        setForm({ ...form, targetType: e.target.value as TargetType })
+              <div className="mb-3 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-gray-400" />
+
+                <label className="text-sm font-medium text-gray-900">
+                  Quick template
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {NOTIFICATION_TEMPLATES.map(
+                  (template) => (
+                    <button
+                      key={template.key}
+                      type="button"
+                      onClick={() =>
+                        applyTemplate(
+                          template.key
+                        )
                       }
-                      className="text-purple-600 focus:ring-purple-500"
+                      className={`rounded-xl border px-4 py-3 text-left transition ${
+                        selectedTemplate ===
+                        template.key
+                          ? "border-primary-300 bg-primary-50"
+                          : "border-gray-200 bg-white hover:bg-gray-50"
+                      }`}
+                    >
+                      <p className="text-sm font-medium text-gray-900">
+                        {template.label}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-400">
+                        {TYPES.find(
+                          (item) =>
+                            item.value ===
+                            template.type
+                        )?.label ||
+                          template.type}
+                      </p>
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Message */}
+            <div className="grid gap-5">
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-900">
+                    Title
+                  </label>
+
+                  <span
+                    className={`text-xs ${
+                      titleCount >
+                      TITLE_LIMIT
+                        ? "text-red-500"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {titleCount}/
+                    {TITLE_LIMIT}
+                  </span>
+                </div>
+
+                <input
+                  type="text"
+                  value={form.title}
+                  onChange={(event) =>
+                    setForm(
+                      (previous) => ({
+                        ...previous,
+                        title:
+                          event.target
+                            .value,
+                      })
+                    )
+                  }
+                  placeholder="Notification title"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-900">
+                    Message
+                  </label>
+
+                  <span
+                    className={`text-xs ${
+                      bodyCount >
+                      BODY_LIMIT
+                        ? "text-red-500"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {bodyCount}/
+                    {BODY_LIMIT}
+                  </span>
+                </div>
+
+                <textarea
+                  value={form.body}
+                  onChange={(event) =>
+                    setForm(
+                      (previous) => ({
+                        ...previous,
+                        body:
+                          event.target
+                            .value,
+                      })
+                    )
+                  }
+                  rows={4}
+                  placeholder="Write the notification message..."
+                  className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+            </div>
+
+            {/* Audience */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-gray-400" />
+
+                  <label className="text-sm font-medium text-gray-900">
+                    Audience
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    {
+                      value: "all",
+                      label: "All users",
+                      description:
+                        "Everyone receives it in the Glowee inbox.",
+                    },
+                    {
+                      value:
+                        "specific_user",
+                      label:
+                        "Specific user",
+                      description:
+                        "Send to one customer account.",
+                    },
+                    {
+                      value:
+                        "user_segment",
+                      label:
+                        "User segment",
+                      description:
+                        "Target customers matching a selected segment.",
+                    },
+                  ].map((item) => (
+                    <label
+                      key={item.value}
+                      className={`flex cursor-pointer gap-3 rounded-xl border px-4 py-3 transition ${
+                        form.targetType ===
+                        item.value
+                          ? "border-primary-300 bg-primary-50"
+                          : "border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        value={
+                          item.value
+                        }
+                        checked={
+                          form.targetType ===
+                          item.value
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setForm(
+                            (
+                              previous
+                            ) => ({
+                              ...previous,
+                              targetType:
+                                event
+                                  .target
+                                  .value as TargetType,
+                            })
+                          )
+                        }
+                        className="mt-1 h-4 w-4 accent-primary-600"
+                      />
+
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {item.label}
+                        </p>
+
+                        <p className="mt-0.5 text-xs leading-5 text-gray-500">
+                          {
+                            item.description
+                          }
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-900">
+                    Notification type
+                  </label>
+
+                  <select
+                    value={form.type}
+                    onChange={(event) =>
+                      setForm(
+                        (previous) => ({
+                          ...previous,
+                          type:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                  >
+                    {TYPES.map(
+                      (item) => (
+                        <option
+                          key={
+                            item.value
+                          }
+                          value={
+                            item.value
+                          }
+                        >
+                          {item.label}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+
+                {form.targetType ===
+                "specific_user" ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      User ID
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        form.userId
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setForm(
+                          (
+                            previous
+                          ) => ({
+                            ...previous,
+                            userId:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="Enter user ID"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
                     />
-                    <span className="text-sm font-medium text-gray-800">{item.label}</span>
-                  </label>
-                ))}
+                  </div>
+                ) : null}
+
+                {form.targetType ===
+                "user_segment" ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      Segment
+                    </label>
+
+                    <select
+                      value={
+                        form.segment
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setForm(
+                          (
+                            previous
+                          ) => ({
+                            ...previous,
+                            segment:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                    >
+                      {SEGMENTS.map(
+                        (segment) => (
+                          <option
+                            key={
+                              segment.value ||
+                              "empty"
+                            }
+                            value={
+                              segment.value
+                            }
+                          >
+                            {
+                              segment.label
+                            }
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </div>
+                ) : null}
+
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-xs text-gray-400">
+                    Selected audience
+                  </p>
+
+                  <p className="mt-1 text-sm font-medium text-gray-900">
+                    {buildTargetLabel(
+                      form
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-              <select
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+            {/* Advanced */}
+            <div className="overflow-hidden rounded-xl border border-gray-200">
+              <button
+                type="button"
+                onClick={() =>
+                  setShowAdvanced(
+                    (previous) =>
+                      !previous
+                  )
+                }
+                className="flex w-full items-center justify-between bg-gray-50 px-4 py-3.5 text-left transition hover:bg-gray-100"
               >
-                {TYPES.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    Advanced options
+                  </p>
 
-              <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <p className="text-xs text-gray-500 mb-1">Selected audience</p>
-                <p className="text-sm font-semibold text-gray-900">{buildTargetLabel(form)}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Optional navigation and campaign metadata.
+                  </p>
+                </div>
+
+                {showAdvanced ? (
+                  <ChevronUp className="h-4 w-4 text-gray-400" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                )}
+              </button>
+
+              {showAdvanced ? (
+                <div className="grid gap-4 border-t border-gray-100 p-4 md:grid-cols-3">
+                  <div>
+                    <label className="mb-2 block text-xs font-medium text-gray-700">
+                      Deep link
+                    </label>
+
+                    <input
+                      value={
+                        form.deepLink
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setForm(
+                          (
+                            previous
+                          ) => ({
+                            ...previous,
+                            deepLink:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="glowee://..."
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-medium text-gray-700">
+                      Image URL
+                    </label>
+
+                    <input
+                      value={
+                        form.imageUrl
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setForm(
+                          (
+                            previous
+                          ) => ({
+                            ...previous,
+                            imageUrl:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="Optional image URL"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-medium text-gray-700">
+                      Promo code
+                    </label>
+
+                    <input
+                      value={
+                        form.promoCode
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setForm(
+                          (
+                            previous
+                          ) => ({
+                            ...previous,
+                            promoCode:
+                              event
+                                .target
+                                .value,
+                          })
+                        )
+                      }
+                      placeholder="Optional code"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {validationError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {validationError}
               </div>
-            </div>
-          </div>
+            ) : null}
 
-          {/* Specific User */}
-          {form.targetType === "specific_user" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">User ID</label>
-              <input
-                type="text"
-                placeholder="Enter user ID"
-                value={form.userId}
-                onChange={(e) => setForm({ ...form, userId: e.target.value })}
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
-              />
-            </div>
-          )}
-
-          {/* Segment */}
-          {form.targetType === "user_segment" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Segment</label>
-              <select
-                value={form.segment}
-                onChange={(e) => setForm({ ...form, segment: e.target.value })}
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+            <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
               >
-                {SEGMENTS.map((segment) => (
-                  <option key={segment.value} value={segment.value}>
-                    {segment.label}
-                  </option>
-                ))}
-              </select>
+                <RotateCcw className="h-4 w-4" />
+                Reset
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!canSend}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+
+                {loading
+                  ? "Sending..."
+                  : "Send notification"}
+              </button>
             </div>
-          )}
-
-          {/* Advanced */}
-          <div className="border border-gray-200 rounded-2xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((prev) => !prev)}
-              className="w-full flex items-center justify-between px-4 py-4 bg-gray-50 hover:bg-gray-100 text-left"
-            >
-              <span className="font-medium text-gray-800">Advanced Options</span>
-              <span className="text-sm text-gray-500">{showAdvanced ? "Hide" : "Show"}</span>
-            </button>
-
-            {showAdvanced && (
-              <div className="p-4 grid md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Deep Link
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. glowee://offers"
-                    value={form.deepLink}
-                    onChange={(e) => setForm({ ...form, deepLink: e.target.value })}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Image URL
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Optional image"
-                    value={form.imageUrl}
-                    onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Promo Code
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Optional promo code"
-                    value={form.promoCode}
-                    onChange={(e) => setForm({ ...form, promoCode: e.target.value })}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            )}
           </div>
-
-          {/* Error */}
-          {!!validationError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {validationError}
-            </div>
-          )}
-
-          {/* Send */}
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedTemplate("custom");
-                setShowAdvanced(false);
-                setForm({
-                  title: "",
-                  body: "",
-                  targetType: "all",
-                  userId: "",
-                  segment: "",
-                  type: "general",
-                  deepLink: "",
-                  imageUrl: "",
-                  promoCode: "",
-                });
-              }}
-              className="px-4 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
-            >
-              Reset
-            </button>
-
-            <button
-              onClick={handleSend}
-              disabled={!canSend}
-              className={`px-5 py-3 rounded-xl font-semibold text-white transition ${
-                canSend
-                  ? "bg-purple-600 hover:bg-purple-700"
-                  : "bg-gray-400 cursor-not-allowed"
-              }`}
-            >
-              {loading ? "Sending..." : "Send Notification"}
-            </button>
-          </div>
-        </div>
+        </section>
 
         {/* Preview */}
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Preview</h2>
+          <section className="rounded-2xl border border-gray-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-gray-900">
+              Preview
+            </h2>
 
-            <div className="rounded-[28px] border border-gray-200 bg-black p-3 max-w-sm mx-auto">
-              <div className="rounded-[22px] bg-white min-h-[300px] p-4 flex flex-col">
-                <div className="flex items-center justify-between text-[10px] text-gray-500 mb-4">
-                  <span>9:41</span>
-                  <span>Glowee Preview</span>
-                </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Approximate customer notification appearance.
+            </p>
 
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-500 rounded-xl flex items-center justify-center text-white font-bold">
-                      G
-                    </div>
+            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-600 text-sm font-semibold text-white">
+                    G
+                  </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-semibold text-sm text-gray-900 truncate">Glowee</p>
-                        <span className="text-[10px] text-gray-400">now</span>
-                      </div>
-
-                      <p className="font-semibold text-sm text-gray-900 mt-1 break-words">
-                        {form.title || "Notification Title"}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-900">
+                        Glowee
                       </p>
 
-                      <p className="text-sm text-gray-600 mt-1 break-words">
-                        {form.body || "Notification message will appear here..."}
-                      </p>
+                      <span className="text-[11px] text-gray-400">
+                        now
+                      </span>
                     </div>
-                  </div>
-                </div>
 
-                <div className="mt-5 space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Audience</span>
-                    <span className="font-medium text-gray-900">{buildTargetLabel(form)}</span>
-                  </div>
+                    <p className="mt-2 break-words text-sm font-medium text-gray-900">
+                      {form.title ||
+                        "Notification title"}
+                    </p>
 
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Type</span>
-                    <span className="font-medium text-gray-900 capitalize">{form.type}</span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Deep link</span>
-                    <span className="font-medium text-gray-900 truncate max-w-[180px] text-right">
-                      {form.deepLink || "—"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-auto pt-5">
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-                    <p className="text-sm font-medium text-blue-900">Delivery notes</p>
-                    <ul className="mt-2 text-xs text-blue-800 space-y-1">
-                      <li>• Push is sent only to users with a valid push token.</li>
-                      <li>• Notification is also saved inside the app inbox.</li>
-                      <li>• Keep title short and message action-focused.</li>
-                    </ul>
+                    <p className="mt-1 break-words text-sm leading-5 text-gray-600">
+                      {form.body ||
+                        "Your notification message will appear here."}
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Tips */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Good practices</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li>• Use 3–6 words in the title when possible.</li>
-              <li>• Make the body clear and direct.</li>
-              <li>• Promotions should feel useful, not spammy.</li>
-              <li>• Use deep links when the notification should open a specific screen.</li>
-            </ul>
-          </div>
+            <div className="mt-5 divide-y divide-gray-100 rounded-xl border border-gray-200">
+              <PreviewRow
+                label="Audience"
+                value={buildTargetLabel(
+                  form
+                )}
+              />
+
+              <PreviewRow
+                label="Type"
+                value={
+                  TYPES.find(
+                    (item) =>
+                      item.value ===
+                      form.type
+                  )?.label ||
+                  form.type
+                }
+              />
+
+              <PreviewRow
+                label="Deep link"
+                value={
+                  form.deepLink ||
+                  "None"
+                }
+              />
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-gray-200 bg-white p-5">
+            <h3 className="text-sm font-semibold text-gray-900">
+              Delivery
+            </h3>
+
+            <div className="mt-4 space-y-3 text-sm leading-6 text-gray-600">
+              <p>
+                Every selected customer receives the notification in the Glowee inbox.
+              </p>
+
+              <p>
+                Customers with a valid push token also receive an Expo push notification on their device.
+              </p>
+
+              <p>
+                The delivery count confirms Glowee inbox creation; it does not guarantee device push delivery.
+              </p>
+            </div>
+          </section>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PreviewRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-3">
+      <span className="text-xs text-gray-400">
+        {label}
+      </span>
+
+      <span className="max-w-[220px] break-all text-right text-xs font-medium text-gray-700">
+        {value}
+      </span>
     </div>
   );
 }
