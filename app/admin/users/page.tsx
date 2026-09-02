@@ -3,16 +3,23 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/app/components/ui/Card";
-import { Loading } from "@/app/components/ui/Loading";
-import { Badge } from "@/app/components/ui/Badge";
-import { Button } from "@/app/components/ui/Button";
-import { userApi } from "@/lib/api";
-import { User } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import {
+  Ban,
+  Download,
+  Eye,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  UserCheck,
+  Users,
+  UserPlus,
+} from "lucide-react";
 import { toast } from "sonner";
-import { API_BASE } from "@/lib/api";
+
+import { userApi, API_BASE } from "@/lib/api";
+import { User } from "@/lib/types";
 import { getToken } from "@/lib/auth";
+import { formatDate } from "@/lib/utils";
 
 type UserStats = {
   total_users: number;
@@ -28,6 +35,7 @@ export default function UsersPage() {
   const [stats, setStats] = useState<UserStats | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
@@ -36,25 +44,38 @@ export default function UsersPage() {
 
   useEffect(() => {
     loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, sort]);
 
-  async function loadAll() {
+  async function loadAll(showRefresh = false) {
     try {
-      setLoading(true);
+      if (showRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
       const [usersRes, statsRes] = await Promise.all([
         userApi.getAll({
-          search,
+          search: search.trim(),
           status,
           sort,
         }),
         userApi.getStats(),
       ]);
 
-      setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
+      setUsers(
+        Array.isArray(usersRes.data)
+          ? usersRes.data
+          : []
+      );
+
       setStats(statsRes || null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to load users");
+      toast.error(
+        error?.message || "Failed to load users"
+      );
+
       setUsers([]);
       setStats({
         total_users: 0,
@@ -64,281 +85,534 @@ export default function UsersPage() {
       });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-
   }
 
-      async function exportCsv() {
-  try {
-    const params = new URLSearchParams();
+  async function exportCsv() {
+    try {
+      const params = new URLSearchParams();
 
-    if (search.trim()) params.set("search", search.trim());
-    if (status !== "all") params.set("status", status);
-    if (sort) params.set("sort", sort);
-
-    const token = getToken();
-
-    const res = await fetch(
-      `${API_BASE}/dashboard/admin/users/export?${params.toString()}`,
-      {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+      if (search.trim()) {
+        params.set("search", search.trim());
       }
+
+      if (status !== "all") {
+        params.set("status", status);
+      }
+
+      if (sort) {
+        params.set("sort", sort);
+      }
+
+      const token = getToken();
+
+      const res = await fetch(
+        `${API_BASE}/dashboard/admin/users/export?${params.toString()}`,
+        {
+          headers: {
+            ...(token
+              ? {
+                  Authorization: `Bearer ${token}`,
+                }
+              : {}),
+          },
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to export CSV");
+      }
+
+      const blob = await res.blob();
+      const url =
+        window.URL.createObjectURL(blob);
+
+      const anchor =
+        document.createElement("a");
+
+      anchor.href = url;
+      anchor.download = "users-export.csv";
+
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+
+      window.URL.revokeObjectURL(url);
+
+      toast.success("CSV exported");
+    } catch (error: any) {
+      toast.error(
+        error?.message || "Export failed"
+      );
+    }
+  }
+
+  async function handleToggleBlock(user: User) {
+    const action = user.is_blocked
+      ? "unblock"
+      : "block";
+
+    const confirmed = confirm(
+      `${user.is_blocked ? "Unblock" : "Block"} "${user.name}"?\n\n` +
+        `${
+          user.is_blocked
+            ? "This will restore the user's access."
+            : "This will restrict the user's access to Glowee."
+        }`
     );
 
-    if (!res.ok) {
-      throw new Error("Failed to export CSV");
-    }
-
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "users-export.csv";
-    a.click();
-
-    window.URL.revokeObjectURL(url);
-
-    toast.success("CSV exported successfully");
-  } catch (error: any) {
-    toast.error(error.message || "Export failed");
-  }
-}
-  const handleToggleBlock = async (user: User) => {
-    const action = user.is_blocked ? "unblock" : "block";
-
-    if (!confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
+    if (!confirmed) return;
 
     setTogglingId(user.id);
 
     try {
       await userApi.toggleBlock(user.id);
 
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === user.id ? { ...u, is_blocked: !u.is_blocked } : u
+      setUsers((current) =>
+        current.map((item) =>
+          item.id === user.id
+            ? {
+                ...item,
+                is_blocked:
+                  !item.is_blocked,
+              }
+            : item
         )
       );
 
-      toast.success(`User ${action}ed successfully`);
+      setStats((current) => {
+        if (!current) return current;
+
+        const blocking = !user.is_blocked;
+
+        return {
+          ...current,
+          blocked_users:
+            current.blocked_users +
+            (blocking ? 1 : -1),
+        };
+      });
+
+      toast.success(
+        user.is_blocked
+          ? "User unblocked"
+          : "User blocked"
+      );
     } catch (error: any) {
-      toast.error(error.message || `Failed to ${action} user`);
+      toast.error(
+        error?.message ||
+          `Failed to ${action} user`
+      );
     } finally {
       setTogglingId(null);
     }
-  };
+  }
 
   function clearFilters() {
     setSearch("");
     setStatus("all");
     setSort("created_desc");
-    setTimeout(() => loadAll(), 0);
+
+    setTimeout(() => {
+      loadAll();
+    }, 0);
   }
 
-  if (loading) return <Loading size="lg" />;
+  const hasFilters =
+    search.trim() ||
+    status !== "all" ||
+    sort !== "created_desc";
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-          <p className="text-gray-600">Manage all registered users</p>
+          <p className="text-sm font-medium text-primary-600">
+            Operations
+          </p>
+
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+            Users
+          </h1>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Manage registered Glowee customers and
+            account access.
+          </p>
         </div>
 
-<div className="flex gap-2">
-  <Button variant="secondary" onClick={exportCsv}>
-    Export CSV
-  </Button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
 
-  <Button variant="secondary" onClick={loadAll}>
-    Refresh
-  </Button>
-</div>
+          <button
+            type="button"
+            disabled={refreshing}
+            onClick={() => loadAll(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${
+                refreshing
+                  ? "animate-spin"
+                  : ""
+              }`}
+            />
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard title="Total Users" value={stats.total_users} />
-          <StatCard
-            title="Active Users"
-            value={stats.active_users}
-            color="text-emerald-600"
-          />
-          <StatCard
-            title="Blocked Users"
-            value={stats.blocked_users}
-            color="text-red-600"
-          />
-          <StatCard
-            title="New This Month"
-            value={stats.new_this_month}
-            color="text-blue-600"
-          />
-        </div>
-      )}
+      {/* Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          label="Total users"
+          value={stats?.total_users ?? 0}
+          icon={Users}
+        />
+
+        <SummaryCard
+          label="Active users"
+          value={stats?.active_users ?? 0}
+          icon={UserCheck}
+        />
+
+        <SummaryCard
+          label="Blocked users"
+          value={stats?.blocked_users ?? 0}
+          icon={Ban}
+        />
+
+        <SummaryCard
+          label="New this month"
+          value={stats?.new_this_month ?? 0}
+          icon={UserPlus}
+        />
+      </div>
 
       {/* Filters */}
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Search */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Search
-            </label>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-col gap-3 xl:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
             <input
-              type="text"
-              placeholder="Name, phone, email..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  loadAll();
+                }
+              }}
+              placeholder="Search name, phone or email..."
+              className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
             />
           </div>
 
-          {/* Status */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Status
-            </label>
-            <select
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="all">All Users</option>
-              <option value="active">Active</option>
-              <option value="blocked">Blocked</option>
-            </select>
-          </div>
+          <select
+            value={status}
+            onChange={(e) =>
+              setStatus(e.target.value)
+            }
+            className="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+          >
+            <option value="all">
+              All statuses
+            </option>
+            <option value="active">
+              Active
+            </option>
+            <option value="blocked">
+              Blocked
+            </option>
+          </select>
 
-          {/* Sort */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Sort By
-            </label>
-            <select
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-            >
-              <option value="created_desc">Newest First</option>
-              <option value="created_asc">Oldest First</option>
-              <option value="name_asc">Name A-Z</option>
-              <option value="bookings_desc">Most Bookings</option>
-              <option value="spent_desc">Highest Spent</option>
-            </select>
-          </div>
+          <select
+            value={sort}
+            onChange={(e) =>
+              setSort(e.target.value)
+            }
+            className="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+          >
+            <option value="created_desc">
+              Newest first
+            </option>
+            <option value="created_asc">
+              Oldest first
+            </option>
+            <option value="name_asc">
+              Name A–Z
+            </option>
+            <option value="bookings_desc">
+              Most bookings
+            </option>
+            <option value="spent_desc">
+              Highest spent
+            </option>
+          </select>
 
-          {/* Buttons */}
-          <div className="flex items-end gap-2">
-            <Button className="w-full" onClick={loadAll}>
-              Search
-            </Button>
-            <Button variant="secondary" className="w-full" onClick={clearFilters}>
+          <button
+            type="button"
+            onClick={() => loadAll()}
+            className="h-11 rounded-xl bg-primary-600 px-5 text-sm font-medium text-white transition hover:bg-primary-700"
+          >
+            Search
+          </button>
+
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+            >
               Clear
-            </Button>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Users */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        {loading ? (
+          <div className="flex min-h-[360px] items-center justify-center">
+            <div className="text-center">
+              <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-500" />
+
+              <p className="mt-3 text-sm text-gray-500">
+                Loading users...
+              </p>
+            </div>
           </div>
-        </div>
-      </Card>
+        ) : users.length === 0 ? (
+          <div className="flex min-h-[360px] flex-col items-center justify-center px-6 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
+              <Users className="h-6 w-6 text-gray-400" />
+            </div>
 
-      {/* Table */}
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Phone</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Wallet</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Joined</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
+            <h2 className="mt-4 text-sm font-semibold text-gray-900">
+              No users found
+            </h2>
 
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-500">
-                    No users found
-                  </td>
-                </tr>
-              ) : (
-                users.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="border-b border-gray-100 hover:bg-gray-50"
-                  >
-                    <td className="py-3 px-4 font-medium">{user.name}</td>
-                    <td className="py-3 px-4 text-gray-600">{user.phone}</td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {user.email || "-"}
-                    </td>
-                    <td className="py-3 px-4 text-green-600 font-semibold">
-                      AED {Number(user.wallet_balance_aed || 0).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4">
-                      {user.is_blocked ? (
-                        <Badge variant="danger">Blocked</Badge>
-                      ) : user.is_active ? (
-                        <Badge variant="success">Active</Badge>
-                      ) : (
-                        <Badge variant="gray">Inactive</Badge>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
-                      {user.created_at ? formatDate(user.created_at) : "-"}
-                    </td>
-                    <td className="py-3 px-4 flex gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => router.push(`/admin/users/${user.id}`)}
-                      >
-                        View
-                      </Button>
+            <p className="mt-1 text-sm text-gray-500">
+              Try changing the search or filter options.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] text-sm">
+                <thead className="border-b border-gray-100 bg-gray-50/70 text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-5 py-3 text-left font-medium">
+                      User
+                    </th>
 
-                      <Button
-                        variant={user.is_blocked ? "primary" : "danger"}
-                        size="sm"
-                        onClick={() => handleToggleBlock(user)}
-                        disabled={togglingId === user.id}
-                      >
-                        {togglingId === user.id
-                          ? "..."
-                          : user.is_blocked
-                          ? "Unblock"
-                          : "Block"}
-                      </Button>
-                    </td>
+                    <th className="px-5 py-3 text-left font-medium">
+                      Phone
+                    </th>
+
+                    <th className="px-5 py-3 text-left font-medium">
+                      Wallet
+                    </th>
+
+                    <th className="px-5 py-3 text-left font-medium">
+                      Status
+                    </th>
+
+                    <th className="px-5 py-3 text-left font-medium">
+                      Joined
+                    </th>
+
+                    <th className="px-5 py-3 text-right font-medium">
+                      Actions
+                    </th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                </thead>
+
+                <tbody className="divide-y divide-gray-100">
+                  {users.map((user) => (
+                    <tr
+                      key={user.id}
+                      className="transition hover:bg-gray-50/60"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700">
+                            {user.name
+                              ?.slice(0, 1)
+                              ?.toUpperCase() ||
+                              "U"}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-gray-900">
+                              {user.name ||
+                                "Unnamed user"}
+                            </p>
+
+                            <p className="mt-0.5 truncate text-xs text-gray-500">
+                              {user.email ||
+                                "No email"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 text-gray-600">
+                        {user.phone || "—"}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-gray-900">
+                          AED{" "}
+                          {Number(
+                            user.wallet_balance_aed ||
+                              0
+                          ).toFixed(2)}
+                        </p>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <UserStatus user={user} />
+                      </td>
+
+                      <td className="px-5 py-4 text-gray-500">
+                        {user.created_at
+                          ? formatDate(
+                              user.created_at
+                            )
+                          : "—"}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              router.push(
+                                `/admin/users/${user.id}`
+                              )
+                            }
+                            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleToggleBlock(
+                                user
+                              )
+                            }
+                            disabled={
+                              togglingId === user.id
+                            }
+                            className={
+                              user.is_blocked
+                                ? "inline-flex h-9 items-center gap-2 rounded-lg bg-primary-600 px-3 text-xs font-medium text-white transition hover:bg-primary-700 disabled:opacity-50"
+                                : "inline-flex h-9 items-center gap-2 rounded-lg border border-red-200 bg-white px-3 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                            }
+                          >
+                            {user.is_blocked ? (
+                              <ShieldCheck className="h-3.5 w-3.5" />
+                            ) : (
+                              <Ban className="h-3.5 w-3.5" />
+                            )}
+
+                            {togglingId ===
+                            user.id
+                              ? "Updating..."
+                              : user.is_blocked
+                              ? "Unblock"
+                              : "Block"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="border-t border-gray-100 px-5 py-3 text-sm text-gray-500">
+              Showing {users.length} user
+              {users.length !== 1 ? "s" : ""}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function StatCard({
-  title,
+function SummaryCard({
+  label,
   value,
-  color = "text-gray-900",
+  icon: Icon,
 }: {
-  title: string;
+  label: string;
   value: number;
-  color?: string;
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm">
-      <div className="text-xs text-gray-600">{title}</div>
-      <div className={`mt-1 text-2xl font-bold ${color}`}>{value}</div>
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500">
+            {label}
+          </p>
+
+          <p className="mt-2 text-3xl font-semibold text-gray-900">
+            {value}
+          </p>
+        </div>
+
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+          <Icon className="h-5 w-5 text-primary-600" />
+        </div>
+      </div>
     </div>
+  );
+}
+
+function UserStatus({
+  user,
+}: {
+  user: User;
+}) {
+  if (user.is_blocked) {
+    return (
+      <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+        Blocked
+      </span>
+    );
+  }
+
+  if (user.is_active) {
+    return (
+      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+        Active
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600">
+      Inactive
+    </span>
   );
 }
