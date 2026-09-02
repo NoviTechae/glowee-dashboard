@@ -1,430 +1,479 @@
 // app/admin/salons/[id]/branches/create/page.tsx
 "use client";
 
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Home,
+  MapPin,
+  Plus,
+} from "lucide-react";
+import { toast } from "sonner";
+
 import { api } from "@/lib/api";
 import LocationPicker from "@/app/components/LocationPicker";
-import Link from "next/link";
 
-export default function CreateBranchPage() {
+export default function CreateLocationPage() {
   const params = useParams();
   const router = useRouter();
 
-  const salonId = Array.isArray(params.id) ? params.id[0] : (params.id as string);
+  const salonId = Array.isArray(params.id)
+    ? params.id[0]
+    : (params.id as string);
 
-  // Basic Info
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
   const [area, setArea] = useState("");
   const [addressLine, setAddressLine] = useState("");
 
-  // Contact Info
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
-  const [instagram, setInstagram] = useState("");
-
-  // Location
   const [locOpen, setLocOpen] = useState(false);
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
 
-  // Settings
-  const [supportsHomeServices, setSupportsHomeServices] = useState(false);
+  const [supportsHomeServices, setSupportsHomeServices] =
+    useState(false);
   const [isActive, setIsActive] = useState(true);
 
-  // State
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const canSubmit = useMemo(() => {
+    return (
+      name.trim().length >= 2 &&
+      city.trim().length >= 2 &&
+      area.trim().length >= 2 &&
+      lat !== null &&
+      lng !== null
+    );
+  }, [name, city, area, lat, lng]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setError("");
 
     if (!salonId) {
-      setError("Missing salon ID");
+      setError("Missing business ID.");
       return;
     }
 
-    // ✅ Validation
-    if (!name.trim()) {
-      setError("Branch name is required");
+    if (name.trim().length < 2) {
+      setError(
+        "Location name must contain at least 2 characters."
+      );
       return;
     }
 
-    if (!city.trim()) {
-      setError("City is required");
+    if (city.trim().length < 2) {
+      setError("Please enter a valid city.");
       return;
     }
 
-    if (!area.trim()) {
-      setError("Area is required");
+    if (area.trim().length < 2) {
+      setError("Please enter a valid area.");
       return;
     }
 
-    if (lat == null || lng == null) {
-      setError("Please pick a location on the map");
-      return;
-    }
-
-    if (email && !email.includes("@")) {
-      setError("Please enter a valid email");
+    if (lat === null || lng === null) {
+      setError("Please select the location on the map.");
       return;
     }
 
     setLoading(true);
 
     try {
-      // ✅ Clean API call
-      await api.post(`/dashboard/admin/salons/${salonId}/branches`, {
-        name: name.trim(),
-        city: city.trim(),
-        area: area.trim(),
-        address_line: addressLine?.trim() || null,
-        phone: phone?.trim() || null,
-        email: email?.trim() || null,
-        whatsapp: whatsapp?.trim() || null,
-        instagram: instagram?.trim() || null,
-        lat,
-        lng,
-        supports_home_services: supportsHomeServices,
-        is_active: isActive,
-      });
+      await api.post(
+        `/dashboard/admin/salons/${salonId}/branches`,
+        {
+          name: name.trim(),
+          country: "United Arab Emirates",
+          city: city.trim(),
+          area: area.trim(),
+          address_line:
+            addressLine.trim() || null,
+          lat,
+          lng,
+          supports_home_services:
+            supportsHomeServices,
+          is_active: isActive,
+        }
+      );
 
-      // Success - redirect
+      toast.success("Location created");
+
       router.push(`/admin/salons/${salonId}`);
       router.refresh();
-    } catch (err: any) {
-      setError(err?.message || "Failed to create branch");
+    } catch (e: any) {
+      const message =
+        e?.message || "Failed to create location";
+
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-2xl mx-auto">
-        {/* Back Link */}
-        <Link
-          href={`/admin/salons/${salonId}`}
-          className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center"
-        >
-          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to salon
-        </Link>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <Link
+        href={`/admin/salons/${salonId}`}
+        className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to business
+      </Link>
 
-        {/* Header */}
-        <div className="mt-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Add New Branch</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Create a new branch location for this salon
-          </p>
+      <div>
+        <p className="text-sm font-medium text-primary-600">
+          Business location
+        </p>
+
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+          Add location
+        </h1>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Add a physical location and configure how it
+          operates on Glowee.
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <form
+        onSubmit={onSubmit}
+        className="space-y-6"
+      >
+        {/* Basic information */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <h2 className="text-base font-semibold text-gray-900">
+              Location information
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Enter the name and address customers will
+              associate with this location.
+            </p>
+          </div>
+
+          <div className="space-y-5 p-6">
+            <Field
+              label="Location name"
+              required
+            >
+              <input
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setError("");
+                }}
+                placeholder="e.g. Al Ain"
+                className={inputClass}
+              />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="City" required>
+                <input
+                  value={city}
+                  onChange={(e) => {
+                    setCity(e.target.value);
+                    setError("");
+                  }}
+                  placeholder="Al Ain"
+                  className={inputClass}
+                />
+              </Field>
+
+              <Field label="Area" required>
+                <input
+                  value={area}
+                  onChange={(e) => {
+                    setArea(e.target.value);
+                    setError("");
+                  }}
+                  placeholder="Al Jimi"
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+
+            <Field
+              label="Address line"
+              hint="Optional"
+            >
+              <input
+                value={addressLine}
+                onChange={(e) =>
+                  setAddressLine(e.target.value)
+                }
+                placeholder="Building, street, floor or unit"
+                className={inputClass}
+              />
+            </Field>
+          </div>
         </div>
 
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-red-500 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        )}
+        {/* Map */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <h2 className="text-base font-semibold text-gray-900">
+              Map location
+            </h2>
 
-        {/* Form */}
-        <form onSubmit={onSubmit} className="bg-white border rounded-2xl p-6 shadow-sm space-y-6">
-          {/* Basic Info Section */}
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Branch Name *
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="e.g., Glowee - Marina Branch"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                    value={city}
-                    onChange={(e) => {
-                      setCity(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder="Abu Dhabi"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Area *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                    value={area}
-                    onChange={(e) => {
-                      setArea(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder="Al Reem Island"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Address Line
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={addressLine}
-                  onChange={(e) => setAddressLine(e.target.value)}
-                  placeholder="Building name, street, floor, unit..."
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Full address details for customers
-                </p>
-              </div>
-            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Select the exact location used by Glowee for
+              discovery and directions.
+            </p>
           </div>
 
-          {/* Location Section */}
-          <div className="pt-6 border-t">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Location *</h2>
+          <div className="p-6">
+            {lat !== null && lng !== null ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                    </div>
 
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setLocOpen(true)}
-                className="w-full md:w-auto flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg px-6 py-3 hover:border-pink-400 hover:bg-pink-50 transition"
-              >
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="text-sm font-medium text-gray-700">
-                  {lat && lng ? "Change Location" : "Pick Location on Map"}
-                </span>
-              </button>
-
-              {/* Location Preview */}
-              {lat != null && lng != null && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-start">
-                    <svg className="w-5 h-5 text-green-600 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-green-800">
-                        Location Selected ✓
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        Location selected
                       </p>
+
                       {address && (
-                        <p className="text-sm text-green-700 mt-1">
-                          <strong>Address:</strong> {address}
+                        <p className="mt-1 text-sm text-gray-600">
+                          {address}
                         </p>
                       )}
-                      <p className="text-xs text-green-600 mt-1 font-mono">
-                        {lat.toFixed(6)}, {lng.toFixed(6)}
+
+                      <p className="mt-2 text-xs text-gray-500">
+                        {lat.toFixed(6)},{" "}
+                        {lng.toFixed(6)}
                       </p>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* Location Required Notice */}
-              {!lat && !lng && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex items-start">
-                    <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                    <p className="text-sm text-blue-700">
-                      Click "Pick Location on Map" to set the branch's GPS coordinates. 
-                      This helps customers find your location.
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocOpen(true)
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    Change location
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLocOpen(true)}
+                className="flex min-h-[170px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50/50 px-6 text-center transition hover:border-primary-300 hover:bg-primary-50/30"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white">
+                  <MapPin className="h-5 w-5 text-primary-600" />
+                </div>
+
+                <p className="mt-3 text-sm font-semibold text-gray-900">
+                  Pick location on map
+                </p>
+
+                <p className="mt-1 max-w-sm text-xs leading-5 text-gray-500">
+                  Choose the exact GPS location so Glowee
+                  can use it for location-based experiences.
+                </p>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Settings */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <h2 className="text-base font-semibold text-gray-900">
+              Location settings
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Configure service availability and location
+              status.
+            </p>
           </div>
 
-          {/* Contact Info Section */}
-          <div className="pt-6 border-t">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h2>
+          <div className="divide-y divide-gray-100">
+            <SettingRow
+              icon={Home}
+              title="Home services"
+              description="Allow this location to support services delivered at the customer's address."
+              enabled={supportsHomeServices}
+              onToggle={() =>
+                setSupportsHomeServices(
+                  (current) => !current
+                )
+              }
+            />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+971 50 123 4567"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  WhatsApp Number
-                </label>
-                <input
-                  type="tel"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  placeholder="+971 50 123 4567"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="branch@salon.ae"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Instagram Username
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-2.5 text-gray-500">@</span>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded-lg pl-8 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                    value={instagram}
-                    onChange={(e) => setInstagram(e.target.value)}
-                    placeholder="glowee_marina"
-                  />
-                </div>
-              </div>
-            </div>
+            <SettingRow
+              icon={CheckCircle2}
+              title="Active location"
+              description="Active locations can be used by the business and shown in relevant Glowee experiences."
+              enabled={isActive}
+              onToggle={() =>
+                setIsActive(
+                  (current) => !current
+                )
+              }
+            />
           </div>
+        </div>
 
-          {/* Settings Section */}
-          <div className="pt-6 border-t">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Settings</h2>
+        {/* Actions */}
+        <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() =>
+              router.push(
+                `/admin/salons/${salonId}`
+              )
+            }
+            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
 
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <input
-                  id="home-services"
-                  type="checkbox"
-                  checked={supportsHomeServices}
-                  onChange={(e) => setSupportsHomeServices(e.target.checked)}
-                  className="w-4 h-4 text-pink-500 border-gray-300 rounded focus:ring-pink-300 mt-0.5"
-                />
-                <div>
-                  <label htmlFor="home-services" className="text-sm font-medium text-gray-700">
-                    Supports Home Services
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enable if this branch offers services at customer locations
-                  </p>
-                </div>
-              </div>
+          <button
+            type="submit"
+            disabled={!canSubmit || loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            {loading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                Add location
+              </>
+            )}
+          </button>
+        </div>
+      </form>
 
-              <div className="flex items-start gap-3">
-                <input
-                  id="active"
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="w-4 h-4 text-pink-500 border-gray-300 rounded focus:ring-pink-300 mt-0.5"
-                />
-                <div>
-                  <label htmlFor="active" className="text-sm font-medium text-gray-700">
-                    Active (Visible to customers)
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Inactive branches are hidden from the app
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+      <LocationPicker
+        open={locOpen}
+        onClose={() => setLocOpen(false)}
+        onConfirm={(loc) => {
+          setLat(loc.lat);
+          setLng(loc.lng);
+          setAddress(loc.address);
+          setLocOpen(false);
+          setError("");
+        }}
+      />
+    </div>
+  );
+}
 
-          {/* Actions */}
-          <div className="pt-6 border-t flex gap-3">
-            <button
-              type="button"
-              onClick={() => router.push(`/admin/salons/${salonId}`)}
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 font-medium text-gray-700 hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
+const inputClass =
+  "h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100";
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-lg px-4 py-2.5 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Creating...
-                </span>
-              ) : (
-                "Create Branch"
-              )}
-            </button>
-          </div>
-        </form>
+function Field({
+  label,
+  children,
+  required = false,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-gray-800">
+          {label}
+          {required && (
+            <span className="ml-1 text-red-500">
+              *
+            </span>
+          )}
+        </span>
 
-        {/* Location Picker Modal */}
-        <LocationPicker
-          open={locOpen}
-          onClose={() => setLocOpen(false)}
-          onConfirm={(loc) => {
-            setLat(loc.lat);
-            setLng(loc.lng);
-            setAddress(loc.address);
-            setLocOpen(false);
-          }}
-        />
+        {hint && (
+          <span className="text-xs text-gray-400">
+            {hint}
+          </span>
+        )}
       </div>
+
+      {children}
+    </label>
+  );
+}
+
+function SettingRow({
+  icon: Icon,
+  title,
+  description,
+  enabled,
+  onToggle,
+}: {
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
+  title: string;
+  description: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-5 px-6 py-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50">
+          <Icon className="h-5 w-5 text-gray-500" />
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-gray-900">
+            {title}
+          </p>
+
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
+            {description}
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition ${
+          enabled
+            ? "bg-primary-600"
+            : "bg-gray-200"
+        }`}
+      >
+        <span
+          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${
+            enabled ? "left-6" : "left-1"
+          }`}
+        />
+      </button>
     </div>
   );
 }
