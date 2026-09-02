@@ -2,8 +2,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
+import {
+  ArrowLeft,
+  Ban,
+  CalendarDays,
+  Eye,
+  MapPin,
+  ShieldCheck,
+  UserCheck,
+  WalletCards,
+} from "lucide-react";
+import { toast } from "sonner";
+
 import { api, userApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
@@ -21,66 +33,112 @@ type UserDetail = {
   last_booking_at?: string | null;
 };
 
+type BookingStatus =
+  | "pending"
+  | "confirmed"
+  | "completed"
+  | "cancelled";
+
 type Booking = {
   id: string;
   scheduled_at: string;
   mode: "in_salon" | "home";
-  status: "pending" | "confirmed" | "completed" | "cancelled" | "no_show";
+  status: BookingStatus;
   total_aed: number;
   salon_name: string;
   branch_name?: string | null;
   created_at: string;
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  pending:   "bg-yellow-50 text-yellow-700 border-yellow-200",
-  confirmed: "bg-blue-50 text-blue-700 border-blue-200",
-  completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  cancelled: "bg-red-50 text-red-700 border-red-200",
-  no_show:   "bg-gray-100 text-gray-600 border-gray-200",
-};
-
 export default function UserDetailPage() {
   const params = useParams();
-  const router = useRouter();
-  const userId = Array.isArray(params.id) ? params.id[0] : (params.id as string);
 
-  const [user, setUser] = useState<UserDetail | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const userId = Array.isArray(params.id)
+    ? params.id[0]
+    : (params.id as string);
+
+  const [user, setUser] = useState<UserDetail | null>(
+    null
+  );
+
+  const [bookings, setBookings] = useState<Booking[]>(
+    []
+  );
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [toggling, setToggling] = useState(false);
 
   async function load() {
     try {
-      setError(null);
       setLoading(true);
-      const data = await api.get(`/dashboard/admin/users/${userId}`);
-      setUser(data.user);
-      setBookings(data.bookings || []);
+      setError("");
+
+      const data = await api.get(
+        `/dashboard/admin/users/${userId}`
+      );
+
+      setUser(data.user || null);
+
+      setBookings(
+        Array.isArray(data.bookings)
+          ? data.bookings
+          : []
+      );
     } catch (e: any) {
-      setError(e?.message || "Failed to load user");
+      setError(
+        e?.message || "Failed to load user"
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [userId]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   async function handleToggleBlock() {
     if (!user) return;
-    const action = user.is_blocked ? "unblock" : "block";
-    if (!confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
+
+    const nextBlocked = !user.is_blocked;
+
+    const confirmed = confirm(
+      `${nextBlocked ? "Block" : "Unblock"} "${user.name}"?\n\n` +
+        `${
+          nextBlocked
+            ? "This will restrict the user's access to Glowee."
+            : "This will restore the user's access."
+        }`
+    );
+
+    if (!confirmed) return;
 
     setToggling(true);
-    try {
-await userApi.toggleBlock(userId);
 
-setUser((prev) =>
-  prev ? { ...prev, is_blocked: !prev.is_blocked } : prev
-);
+    try {
+      await userApi.toggleBlock(userId);
+
+      setUser((current) =>
+        current
+          ? {
+              ...current,
+              is_blocked: nextBlocked,
+            }
+          : current
+      );
+
+      toast.success(
+        nextBlocked
+          ? "User blocked"
+          : "User unblocked"
+      );
     } catch (e: any) {
-      setError(e?.message || `Failed to ${action} user`);
+      toast.error(
+        e?.message ||
+          "Failed to update user access"
+      );
     } finally {
       setToggling(false);
     }
@@ -88,22 +146,32 @@ setUser((prev) =>
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex min-h-[420px] items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto" />
-          <p className="mt-4 text-gray-600">Loading user...</p>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-500" />
+
+          <p className="mt-3 text-sm text-gray-500">
+            Loading user...
+          </p>
         </div>
       </div>
     );
   }
 
-  if (error || !user) {
+  if (!user) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-          <p className="text-red-700 font-semibold">{error || "User not found"}</p>
-          <Link href="/admin/users" className="mt-4 inline-block text-pink-500 hover:underline">
-            ← Back to users
+      <div className="mx-auto max-w-7xl">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+          <p className="text-sm font-medium text-red-700">
+            {error || "User not found"}
+          </p>
+
+          <Link
+            href="/admin/users"
+            className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-red-700"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to users
           </Link>
         </div>
       </div>
@@ -111,152 +179,274 @@ setUser((prev) =>
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Back */}
       <Link
         href="/admin/users"
-        className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1"
+        className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
+        <ArrowLeft className="h-4 w-4" />
         Back to users
       </Link>
 
       {/* Header */}
-      <div className="bg-white border rounded-2xl p-6 shadow-sm">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-       <div className="w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-2xl font-bold">
-  {(user.name || "U")
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase()}
-</div>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-sm font-medium text-primary-600">
+            User details
+          </p>
+
+          <div className="mt-2 flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-50 text-lg font-semibold text-primary-700">
+              {getInitials(user.name)}
+            </div>
+
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
-              <p className="text-gray-500">{user.phone}</p>
-              {user.email && <p className="text-gray-500 text-sm">{user.email}</p>}
-              <div className="mt-2 flex items-center gap-2">
-                {user.is_blocked ? (
-                  <span className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold bg-red-50 text-red-700 border-red-200">
-                    Blocked
-                  </span>
-                ) : user.is_active ? (
-                  <span className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">
-                    Active
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold bg-gray-100 text-gray-600 border-gray-200">
-                    Inactive
-                  </span>
-                )}
-                <span className="text-xs text-gray-400">
-Joined {user.created_at ? formatDate(user.created_at) : "-"}
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+                  {user.name}
+                </h1>
+
+                <UserStatus user={user} />
               </div>
+
+              <p className="mt-1 text-sm text-gray-500">
+                {user.phone}
+                {user.email
+                  ? ` • ${user.email}`
+                  : ""}
+              </p>
             </div>
           </div>
-
-          <button
-            onClick={handleToggleBlock}
-            disabled={toggling}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50 ${
-              user.is_blocked
-                ? "bg-emerald-500 hover:bg-emerald-600 text-white"
-                : "bg-red-500 hover:bg-red-600 text-white"
-            }`}
-          >
-            {toggling ? "..." : user.is_blocked ? "Unblock User" : "Block User"}
-          </button>
         </div>
 
-        {/* Stats Row */}
-        <div className="mt-6 grid grid-cols-3 gap-4 pt-6 border-t">
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">{user.total_bookings}</p>
-            <p className="text-sm text-gray-500">Total Bookings</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-emerald-600">
-              AED {Number(user.total_spent_aed).toFixed(2)}
-            </p>
-            <p className="text-sm text-gray-500">Total Spent</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-blue-600">
-              AED {Number(user.wallet_balance_aed).toFixed(2)}
-            </p>
-            <p className="text-sm text-gray-500">Wallet Balance</p>
-          </div>
+        <button
+          type="button"
+          onClick={handleToggleBlock}
+          disabled={toggling}
+          className={
+            user.is_blocked
+              ? "inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:opacity-50"
+              : "inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+          }
+        >
+          {user.is_blocked ? (
+            <ShieldCheck className="h-4 w-4" />
+          ) : (
+            <Ban className="h-4 w-4" />
+          )}
+
+          {toggling
+            ? "Updating..."
+            : user.is_blocked
+            ? "Unblock user"
+            : "Block user"}
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          label="Total bookings"
+          value={String(user.total_bookings || 0)}
+          icon={CalendarDays}
+        />
+
+        <SummaryCard
+          label="Total spent"
+          value={`AED ${Number(
+            user.total_spent_aed || 0
+          ).toFixed(2)}`}
+          icon={WalletCards}
+        />
+
+        <SummaryCard
+          label="Wallet balance"
+          value={`AED ${Number(
+            user.wallet_balance_aed || 0
+          ).toFixed(2)}`}
+          icon={WalletCards}
+        />
+
+        <SummaryCard
+          label="Joined"
+          value={
+            user.created_at
+              ? formatDate(user.created_at)
+              : "—"
+          }
+          icon={UserCheck}
+        />
+      </div>
+
+      {/* Account info */}
+      <div className="rounded-2xl border border-gray-200 bg-white">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <h2 className="text-base font-semibold text-gray-900">
+            Account information
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Customer account details and recent activity.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-3">
+          <InfoItem
+            label="Phone"
+            value={user.phone || "—"}
+          />
+
+          <InfoItem
+            label="Email"
+            value={user.email || "No email"}
+          />
+
+          <InfoItem
+            label="Last booking"
+            value={
+              user.last_booking_at
+                ? new Date(
+                    user.last_booking_at
+                  ).toLocaleString()
+                : "No bookings yet"
+            }
+          />
         </div>
       </div>
 
-      {/* Booking History */}
-      <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Booking History
-            {bookings.length > 0 && (
-              <span className="ml-2 text-sm font-normal text-gray-400">
-                (last {bookings.length})
-              </span>
-            )}
-          </h2>
+      {/* Booking history */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Booking history
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Recent bookings made by this customer.
+            </p>
+          </div>
+
+          {bookings.length > 0 && (
+            <span className="text-sm text-gray-400">
+              {bookings.length} booking
+              {bookings.length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
 
         {bookings.length === 0 ? (
-          <div className="py-12 text-center text-gray-500">
-            <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <p className="text-sm font-medium">No bookings yet</p>
+          <div className="flex min-h-[260px] flex-col items-center justify-center px-6 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
+              <CalendarDays className="h-6 w-6 text-gray-400" />
+            </div>
+
+            <h3 className="mt-4 text-sm font-semibold text-gray-900">
+              No bookings yet
+            </h3>
+
+            <p className="mt-1 text-sm text-gray-500">
+              This customer has not made any bookings.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead className="border-b border-gray-100 bg-gray-50/70 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Salon</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Mode</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Total</th>
+                  <th className="px-5 py-3 text-left font-medium">
+                    Business
+                  </th>
+
+                  <th className="px-5 py-3 text-left font-medium">
+                    Appointment
+                  </th>
+
+                  <th className="px-5 py-3 text-left font-medium">
+                    Mode
+                  </th>
+
+                  <th className="px-5 py-3 text-left font-medium">
+                    Status
+                  </th>
+
+                  <th className="px-5 py-3 text-left font-medium">
+                    Total
+                  </th>
+
+                  <th className="px-5 py-3 text-right font-medium">
+                    Action
+                  </th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-gray-100">
-                {bookings.map((b) => (
-                  <tr key={b.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{b.salon_name}</p>
-                      {b.branch_name && (
-                        <p className="text-xs text-gray-500">📍 {b.branch_name}</p>
+                {bookings.map((booking) => (
+                  <tr
+                    key={booking.id}
+                    className="transition hover:bg-gray-50/60"
+                  >
+                    <td className="px-5 py-4">
+                      <p className="font-semibold text-gray-900">
+                        {booking.salon_name ||
+                          "Business"}
+                      </p>
+
+                      {booking.branch_name && (
+                        <p className="mt-1 inline-flex items-center gap-1 text-xs text-gray-500">
+                          <MapPin className="h-3 w-3" />
+                          {booking.branch_name}
+                        </p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {new Date(b.scheduled_at).toLocaleDateString()}
-                      <p className="text-xs text-gray-400">
-                        {new Date(b.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+
+                    <td className="px-5 py-4 text-gray-600">
+                      <p>
+                        {new Date(
+                          booking.scheduled_at
+                        ).toLocaleDateString()}
+                      </p>
+
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        {new Date(
+                          booking.scheduled_at
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </p>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                        b.mode === "home"
-                          ? "bg-purple-50 text-purple-700 border-purple-200"
-                          : "bg-blue-50 text-blue-700 border-blue-200"
-                      }`}>
-                        {b.mode === "home" ? "Home" : "In-Salon"}
-                      </span>
+
+                    <td className="px-5 py-4">
+                      <ModeBadge
+                        mode={booking.mode}
+                      />
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[b.status] || STATUS_STYLES.pending}`}>
-                        {b.status.charAt(0).toUpperCase() + b.status.slice(1).replace("_", " ")}
-                      </span>
+
+                    <td className="px-5 py-4">
+                      <BookingStatusBadge
+                        status={booking.status}
+                      />
                     </td>
-                    <td className="px-4 py-3 font-semibold text-gray-900">
-                      AED {Number(b.total_aed).toFixed(2)}
+
+                    <td className="px-5 py-4 font-medium text-gray-900">
+                      AED{" "}
+                      {Number(
+                        booking.total_aed || 0
+                      ).toFixed(2)}
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <div className="flex justify-end">
+                        <Link
+                          href={`/admin/bookings/${booking.id}`}
+                          className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -267,4 +457,137 @@ Joined {user.created_at ? formatDate(user.created_at) : "-"}
       </div>
     </div>
   );
+}
+
+function SummaryCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-gray-500">
+            {label}
+          </p>
+
+          <p className="mt-2 text-xl font-semibold text-gray-900">
+            {value}
+          </p>
+        </div>
+
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50">
+          <Icon className="h-5 w-5 text-primary-600" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+        {label}
+      </p>
+
+      <p className="mt-2 text-sm font-medium text-gray-900">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function UserStatus({
+  user,
+}: {
+  user: UserDetail;
+}) {
+  if (user.is_blocked) {
+    return (
+      <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+        Blocked
+      </span>
+    );
+  }
+
+  if (user.is_active) {
+    return (
+      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+        Active
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600">
+      Inactive
+    </span>
+  );
+}
+
+function ModeBadge({
+  mode,
+}: {
+  mode: Booking["mode"];
+}) {
+  return (
+    <span className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600">
+      {mode === "home"
+        ? "Home service"
+        : "In-salon"}
+    </span>
+  );
+}
+
+function BookingStatusBadge({
+  status,
+}: {
+  status: BookingStatus;
+}) {
+  const classes: Record<
+    BookingStatus,
+    string
+  > = {
+    pending:
+      "border-amber-200 bg-amber-50 text-amber-700",
+    confirmed:
+      "border-blue-200 bg-blue-50 text-blue-700",
+    completed:
+      "border-emerald-200 bg-emerald-50 text-emerald-700",
+    cancelled:
+      "border-red-200 bg-red-50 text-red-700",
+  };
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${classes[status]}`}
+    >
+      {status.charAt(0).toUpperCase() +
+        status.slice(1)}
+    </span>
+  );
+}
+
+function getInitials(name: string) {
+  return (name || "U")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
