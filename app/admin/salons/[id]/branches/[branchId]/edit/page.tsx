@@ -1,40 +1,55 @@
 // app/admin/salons/[id]/branches/[branchId]/edit/page.tsx
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
 import Link from "next/link";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Home,
+  MapPin,
+  Save,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { api } from "@/lib/api";
+import LocationPicker from "@/app/components/LocationPicker";
 
 type BranchForm = {
   id: string;
   name: string;
+  country?: string | null;
   city: string;
   area: string;
   address_line?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  whatsapp?: string | null;
-  instagram?: string | null;
   supports_home_services?: boolean;
   is_active?: boolean;
-  lat?: number;
-  lng?: number;
+  lat?: number | null;
+  lng?: number | null;
 };
 
-export default function EditBranchPage() {
+export default function EditLocationPage() {
   const params = useParams();
   const router = useRouter();
 
-  const salonId = Array.isArray(params.id) ? params.id[0] : (params.id as string);
-  const branchId = Array.isArray(params.branchId) 
-    ? params.branchId[0] 
+  const salonId = Array.isArray(params.id)
+    ? params.id[0]
+    : (params.id as string);
+
+  const branchId = Array.isArray(params.branchId)
+    ? params.branchId[0]
     : (params.branchId as string);
 
   const [form, setForm] = useState<BranchForm | null>(null);
+  const [original, setOriginal] = useState<BranchForm | null>(null);
+
+  const [locOpen, setLocOpen] = useState(false);
+  const [mapAddress, setMapAddress] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -42,13 +57,20 @@ export default function EditBranchPage() {
 
       try {
         setLoading(true);
-        setError(null);
+        setError("");
 
-        // ✅ Clean API call
-        const data = await api.get(`/dashboard/admin/branches/${branchId}`);
-        setForm(data.branch ?? null);
+        const data = await api.get(
+          `/dashboard/admin/branches/${branchId}`
+        );
+
+        const branch = data.branch as BranchForm;
+
+        setForm(branch);
+        setOriginal(branch);
       } catch (e: any) {
-        setError(e?.message || "Failed to load branch");
+        setError(
+          e?.message || "Failed to load location"
+        );
       } finally {
         setLoading(false);
       }
@@ -57,55 +79,97 @@ export default function EditBranchPage() {
     load();
   }, [branchId]);
 
+  const canSave = useMemo(() => {
+    if (!form) return false;
+
+    return (
+      form.name.trim().length >= 2 &&
+      form.city.trim().length >= 2 &&
+      form.area.trim().length >= 2 &&
+      form.lat != null &&
+      form.lng != null
+    );
+  }, [form]);
+
+  const hasChanges = useMemo(() => {
+    if (!form || !original) return false;
+
+    return (
+      form.name.trim() !== original.name.trim() ||
+      form.city.trim() !== original.city.trim() ||
+      form.area.trim() !== original.area.trim() ||
+      (form.address_line || "").trim() !==
+        (original.address_line || "").trim() ||
+      Number(form.lat) !== Number(original.lat) ||
+      Number(form.lng) !== Number(original.lng) ||
+      Boolean(form.supports_home_services) !==
+        Boolean(original.supports_home_services) ||
+      Boolean(form.is_active) !==
+        Boolean(original.is_active)
+    );
+  }, [form, original]);
+
   async function onSave(e: React.FormEvent) {
     e.preventDefault();
+
     if (!form) return;
 
-    // ✅ Validation
-    setError(null);
+    setError("");
 
-    if (!form.name?.trim()) {
-      setError("Branch name is required");
+    if (form.name.trim().length < 2) {
+      setError(
+        "Location name must contain at least 2 characters."
+      );
       return;
     }
 
-    if (!form.city?.trim()) {
-      setError("City is required");
+    if (form.city.trim().length < 2) {
+      setError("Please enter a valid city.");
       return;
     }
 
-    if (!form.area?.trim()) {
-      setError("Area is required");
+    if (form.area.trim().length < 2) {
+      setError("Please enter a valid area.");
       return;
     }
 
-    if (form.email && !form.email.includes("@")) {
-      setError("Please enter a valid email");
+    if (form.lat == null || form.lng == null) {
+      setError("Please select a location on the map.");
       return;
     }
 
     try {
       setSaving(true);
 
-      // ✅ Clean API call with all fields
-      await api.put(`/dashboard/admin/branches/${branchId}`, {
-        name: form.name.trim(),
-        city: form.city.trim(),
-        area: form.area.trim(),
-        address_line: form.address_line?.trim() || null,
-        phone: form.phone?.trim() || null,
-        email: form.email?.trim() || null,
-        whatsapp: form.whatsapp?.trim() || null,
-        instagram: form.instagram?.trim() || null,
-        supports_home_services: form.supports_home_services ?? false,
-        is_active: form.is_active ?? true,
-      });
+      await api.put(
+        `/dashboard/admin/branches/${branchId}`,
+        {
+          name: form.name.trim(),
+          country:
+            form.country?.trim() ||
+            "United Arab Emirates",
+          city: form.city.trim(),
+          area: form.area.trim(),
+          address_line:
+            form.address_line?.trim() || null,
+          lat: Number(form.lat),
+          lng: Number(form.lng),
+          supports_home_services:
+            Boolean(form.supports_home_services),
+          is_active: Boolean(form.is_active),
+        }
+      );
 
-      // Success - redirect
+      toast.success("Location updated");
+
       router.push(`/admin/salons/${salonId}`);
       router.refresh();
     } catch (e: any) {
-      setError(e?.message || "Failed to update branch");
+      const message =
+        e?.message || "Failed to update location";
+
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -113,10 +177,13 @@ export default function EditBranchPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex min-h-[420px] items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading branch...</p>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-500" />
+
+          <p className="mt-3 text-sm text-gray-500">
+            Loading location...
+          </p>
         </div>
       </div>
     );
@@ -124,14 +191,18 @@ export default function EditBranchPage() {
 
   if (!form) {
     return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-          <p className="text-red-700 font-semibold">Branch not found</p>
+      <div className="mx-auto max-w-5xl">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+          <p className="text-sm font-medium text-red-700">
+            {error || "Location not found"}
+          </p>
+
           <Link
             href={`/admin/salons/${salonId}`}
-            className="mt-4 inline-block text-pink-500 hover:underline"
+            className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-red-700"
           >
-            ← Back to salon
+            <ArrowLeft className="h-4 w-4" />
+            Back to business
           </Link>
         </div>
       </div>
@@ -139,283 +210,397 @@ export default function EditBranchPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-2xl mx-auto">
-        {/* Back Link */}
-        <Link
-          href={`/admin/salons/${salonId}`}
-          className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center"
-        >
-          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to salon
-        </Link>
+    <div className="mx-auto max-w-5xl space-y-6">
+      {/* Back */}
+      <Link
+        href={`/admin/salons/${salonId}`}
+        className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to business
+      </Link>
 
-        {/* Header */}
-        <div className="mt-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Edit Branch</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Update branch information and settings
-          </p>
+      {/* Header */}
+      <div>
+        <p className="text-sm font-medium text-primary-600">
+          Business location
+        </p>
+
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+          Edit location
+        </h1>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Update location information and service
+          availability.
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <form
+        onSubmit={onSave}
+        className="space-y-6"
+      >
+        {/* Information */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <h2 className="text-base font-semibold text-gray-900">
+              Location information
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Update the name and address associated with
+              this location.
+            </p>
+          </div>
+
+          <div className="space-y-5 p-6">
+            <Field
+              label="Location name"
+              required
+            >
+              <input
+                value={form.name}
+                onChange={(e) => {
+                  setForm({
+                    ...form,
+                    name: e.target.value,
+                  });
+                  setError("");
+                }}
+                className={inputClass}
+                placeholder="e.g. Al Ain"
+              />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="City" required>
+                <input
+                  value={form.city}
+                  onChange={(e) => {
+                    setForm({
+                      ...form,
+                      city: e.target.value,
+                    });
+                    setError("");
+                  }}
+                  className={inputClass}
+                  placeholder="Al Ain"
+                />
+              </Field>
+
+              <Field label="Area" required>
+                <input
+                  value={form.area}
+                  onChange={(e) => {
+                    setForm({
+                      ...form,
+                      area: e.target.value,
+                    });
+                    setError("");
+                  }}
+                  className={inputClass}
+                  placeholder="Al Jimi"
+                />
+              </Field>
+            </div>
+
+            <Field
+              label="Address line"
+              hint="Optional"
+            >
+              <input
+                value={form.address_line || ""}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    address_line: e.target.value,
+                  })
+                }
+                className={inputClass}
+                placeholder="Building, street, floor or unit"
+              />
+            </Field>
+          </div>
         </div>
 
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-red-500 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        )}
+        {/* Map */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <h2 className="text-base font-semibold text-gray-900">
+              Map location
+            </h2>
 
-        {/* Form */}
-        <form onSubmit={onSave} className="bg-white border rounded-2xl p-6 shadow-sm space-y-6">
-          {/* Basic Info Section */}
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Branch Name *
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={form.name}
-                  onChange={(e) => {
-                    setForm({ ...form, name: e.target.value });
-                    setError(null);
-                  }}
-                  placeholder="e.g., Glowee - Marina Branch"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                    value={form.city}
-                    onChange={(e) => {
-                      setForm({ ...form, city: e.target.value });
-                      setError(null);
-                    }}
-                    placeholder="Abu Dhabi"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Area *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                    value={form.area}
-                    onChange={(e) => {
-                      setForm({ ...form, area: e.target.value });
-                      setError(null);
-                    }}
-                    placeholder="Al Reem Island"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Address Line
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={form.address_line ?? ""}
-                  onChange={(e) => setForm({ ...form, address_line: e.target.value })}
-                  placeholder="Building name, street, floor, unit..."
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Full address details for customers
-                </p>
-              </div>
-            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Update the exact GPS location used by
+              Glowee.
+            </p>
           </div>
 
-          {/* Contact Info Section */}
-          <div className="pt-6 border-t">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h2>
+          <div className="p-6">
+            {form.lat != null &&
+            form.lng != null ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                    </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={form.phone ?? ""}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="+971 50 123 4567"
-                />
-              </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        Location selected
+                      </p>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  WhatsApp Number
-                </label>
-                <input
-                  type="tel"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={form.whatsapp ?? ""}
-                  onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-                  placeholder="+971 50 123 4567"
-                />
-              </div>
+                      {mapAddress && (
+                        <p className="mt-1 text-sm text-gray-600">
+                          {mapAddress}
+                        </p>
+                      )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                  value={form.email ?? ""}
-                  onChange={(e) => {
-                    setForm({ ...form, email: e.target.value });
-                    setError(null);
-                  }}
-                  placeholder="branch@salon.ae"
-                />
-              </div>
+                      {!mapAddress &&
+                        form.address_line && (
+                          <p className="mt-1 text-sm text-gray-600">
+                            {form.address_line}
+                          </p>
+                        )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Instagram Username
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-2.5 text-gray-500">@</span>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded-lg pl-8 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
-                    value={form.instagram ?? ""}
-                    onChange={(e) => setForm({ ...form, instagram: e.target.value })}
-                    placeholder="glowee_marina"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Settings Section */}
-          <div className="pt-6 border-t">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Settings</h2>
-
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <input
-                  id="home-services"
-                  type="checkbox"
-                  checked={!!form.supports_home_services}
-                  onChange={(e) =>
-                    setForm({ ...form, supports_home_services: e.target.checked })
-                  }
-                  className="w-4 h-4 text-pink-500 border-gray-300 rounded focus:ring-pink-300 mt-0.5"
-                />
-                <div>
-                  <label htmlFor="home-services" className="text-sm font-medium text-gray-700">
-                    Supports Home Services
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enable if this branch offers services at customer locations
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <input
-                  id="active"
-                  type="checkbox"
-                  checked={!!form.is_active}
-                  onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                  className="w-4 h-4 text-pink-500 border-gray-300 rounded focus:ring-pink-300 mt-0.5"
-                />
-                <div>
-                  <label htmlFor="active" className="text-sm font-medium text-gray-700">
-                    Active (Visible to customers)
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Inactive branches are hidden from the app
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Location Info (Read-only) */}
-          {form.lat && form.lng && (
-            <div className="pt-6 border-t">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Location</h2>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">Latitude:</span>
-                    <span className="ml-2 font-mono text-gray-900">
-                      {Number(form.lat).toFixed(6)}
-                    </span>
+                      <p className="mt-2 text-xs text-gray-500">
+                        {Number(form.lat).toFixed(6)},{" "}
+                        {Number(form.lng).toFixed(6)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Longitude:</span>
-                    <span className="ml-2 font-mono text-gray-900">
-                      {Number(form.lng).toFixed(6)}
-                    </span>
-                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocOpen(true)
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    Change location
+                  </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Location was set during branch creation
-                </p>
               </div>
-            </div>
-          )}
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLocOpen(true)}
+                className="flex min-h-[170px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50/50 px-6 text-center transition hover:border-primary-300 hover:bg-primary-50/30"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white">
+                  <MapPin className="h-5 w-5 text-primary-600" />
+                </div>
 
-          {/* Actions */}
-          <div className="pt-6 border-t flex gap-3">
-            <button
-              type="button"
-              onClick={() => router.push(`/admin/salons/${salonId}`)}
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 font-medium text-gray-700 hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
+                <p className="mt-3 text-sm font-semibold text-gray-900">
+                  Pick location on map
+                </p>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-lg px-4 py-2.5 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Saving...
-                </span>
-              ) : (
-                "Save Changes"
+                <p className="mt-1 text-xs text-gray-500">
+                  Select the GPS coordinates for this
+                  location.
+                </p>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Settings */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <h2 className="text-base font-semibold text-gray-900">
+              Location settings
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Control service modes and location status.
+            </p>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            <SettingRow
+              icon={Home}
+              title="Home services"
+              description="Allow this location to support services delivered at the customer's address."
+              enabled={Boolean(
+                form.supports_home_services
               )}
-            </button>
+              onToggle={() =>
+                setForm({
+                  ...form,
+                  supports_home_services:
+                    !form.supports_home_services,
+                })
+              }
+            />
+
+            <SettingRow
+              icon={CheckCircle2}
+              title="Active location"
+              description="Active locations can be used by the business and shown in relevant Glowee experiences."
+              enabled={Boolean(form.is_active)}
+              onToggle={() =>
+                setForm({
+                  ...form,
+                  is_active: !form.is_active,
+                })
+              }
+            />
           </div>
-        </form>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() =>
+              router.push(
+                `/admin/salons/${salonId}`
+              )
+            }
+            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={
+              !canSave ||
+              !hasChanges ||
+              saving
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            {saving ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                Save changes
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+
+      <LocationPicker
+        open={locOpen}
+        onClose={() => setLocOpen(false)}
+        onConfirm={(loc) => {
+          setForm({
+            ...form,
+            lat: loc.lat,
+            lng: loc.lng,
+          });
+
+          setMapAddress(loc.address);
+          setLocOpen(false);
+          setError("");
+        }}
+      />
+    </div>
+  );
+}
+
+const inputClass =
+  "h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100";
+
+function Field({
+  label,
+  children,
+  required = false,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-gray-800">
+          {label}
+
+          {required && (
+            <span className="ml-1 text-red-500">
+              *
+            </span>
+          )}
+        </span>
+
+        {hint && (
+          <span className="text-xs text-gray-400">
+            {hint}
+          </span>
+        )}
       </div>
+
+      {children}
+    </label>
+  );
+}
+
+function SettingRow({
+  icon: Icon,
+  title,
+  description,
+  enabled,
+  onToggle,
+}: {
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
+  title: string;
+  description: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-5 px-6 py-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50">
+          <Icon className="h-5 w-5 text-gray-500" />
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-gray-900">
+            {title}
+          </p>
+
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
+            {description}
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition ${
+          enabled
+            ? "bg-primary-600"
+            : "bg-gray-200"
+        }`}
+      >
+        <span
+          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${
+            enabled ? "left-6" : "left-1"
+          }`}
+        />
+      </button>
     </div>
   );
 }
