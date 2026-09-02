@@ -1,50 +1,66 @@
 // app/admin/home-services/page.tsx
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  CheckCircle2,
+  Eye,
+  Home,
+  Mail,
+  Phone,
+  Plus,
+  Search,
+  Trash2,
+  UserCheck,
+} from "lucide-react";
+import { toast } from "sonner";
+
 import { api } from "@/lib/api";
 
-type Salon = {
+type HomeService = {
   id: string;
   name: string;
-  salon_type: "in_salon" | "home" | "both";
+  salon_type: "home";
   is_active: boolean;
   created_at?: string;
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
+  about?: string | null;
 };
 
-function TypeBadge({ type }: { type: Salon["salon_type"] }) {
-  const map: Record<Salon["salon_type"], { label: string; cls: string }> = {
-    home: { label: "Home Service", cls: "bg-purple-50 text-purple-700 border-purple-200" },
-    in_salon: { label: "In-Salon", cls: "bg-blue-50 text-blue-700 border-blue-200" },
-    both: { label: "Both", cls: "bg-pink-50 text-pink-700 border-pink-200" },
-  };
-
-  const x = map[type];
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${x.cls}`}>
-      {x.label}
-    </span>
-  );
-}
+type StatusFilter = "all" | "active" | "inactive";
 
 export default function AdminHomeServicesPage() {
+  const router = useRouter();
+
+  const [businesses, setBusinesses] = useState<HomeService[]>([]);
   const [loading, setLoading] = useState(true);
-  const [salons, setSalons] = useState<Salon[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<StatusFilter>("all");
 
   async function load() {
     try {
       setLoading(true);
-      setError(null);
+      setError("");
 
-      // ✅ Clean API call
-      const json = await api.get("/dashboard/admin/salons?type=home_only");
-      setSalons(json.data || []);
+      const response = await api.get(
+        "/dashboard/admin/salons?type=home_only"
+      );
+
+      setBusinesses(
+        Array.isArray(response.data) ? response.data : []
+      );
     } catch (e: any) {
-      setError(e?.message || "Failed to load home services");
+      const message =
+        e?.message || "Failed to load home services";
+
+      setError(message);
+      setBusinesses([]);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -54,242 +70,466 @@ export default function AdminHomeServicesPage() {
     load();
   }, []);
 
-  async function handleToggleStatus(id: string, name: string, currentStatus: boolean) {
-    const newStatus = !currentStatus;
-    const action = newStatus ? "activate" : "deactivate";
+  const filteredBusinesses = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+
+    return businesses.filter((business) => {
+      const matchesSearch =
+        !search ||
+        business.name?.toLowerCase().includes(search) ||
+        business.email?.toLowerCase().includes(search) ||
+        business.phone?.toLowerCase().includes(search);
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" &&
+          business.is_active) ||
+        (statusFilter === "inactive" &&
+          !business.is_active);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [businesses, searchTerm, statusFilter]);
+
+  const stats = useMemo(() => {
+    const active = businesses.filter(
+      (business) => business.is_active
+    ).length;
+
+    return {
+      total: businesses.length,
+      active,
+      inactive: businesses.length - active,
+    };
+  }, [businesses]);
+
+  async function handleToggleStatus(
+    business: HomeService
+  ) {
+    const nextActive = !business.is_active;
 
     const confirmed = confirm(
-      `${action.charAt(0).toUpperCase() + action.slice(1)} "${name}"?\n\n` +
-        `This will ${action} the home service salon.`
+      `${nextActive ? "Approve" : "Disable"} "${business.name}"?\n\n` +
+        `${
+          nextActive
+            ? "This will make the business active on Glowee."
+            : "This will disable the business on Glowee."
+        }`
     );
 
     if (!confirmed) return;
 
     try {
-      await api.put(`/dashboard/admin/salons/${id}`, {
-        is_active: newStatus,
-      });
-
-      // Update local state
-      setSalons((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, is_active: newStatus } : s))
+      await api.put(
+        `/dashboard/admin/salons/${business.id}`,
+        {
+          is_active: nextActive,
+        }
       );
 
-      alert(`✅ Successfully ${action}d "${name}"`);
+      setBusinesses((current) =>
+        current.map((item) =>
+          item.id === business.id
+            ? {
+                ...item,
+                is_active: nextActive,
+              }
+            : item
+        )
+      );
+
+      toast.success(
+        nextActive
+          ? "Home service approved"
+          : "Home service disabled"
+      );
     } catch (e: any) {
-      alert(`❌ Failed to ${action}: ${e?.message}`);
+      toast.error(
+        e?.message || "Failed to update status"
+      );
     }
   }
 
-  async function onDelete(id: string, name: string) {
+  async function handleDelete(
+    business: HomeService
+  ) {
     const confirmed = confirm(
-      `⚠️ PERMANENT DELETE\n\n` +
-        `This will permanently delete "${name}" and all related data:\n` +
-        `• Services\n` +
-        `• Staff\n` +
-        `• Dashboard account\n\n` +
-        `This action CANNOT be undone.\n\n` +
-        `Continue?`
+      `Permanently delete "${business.name}"?\n\n` +
+        `This may delete related services, locations and dashboard access.\n\n` +
+        `This action cannot be undone.`
     );
 
     if (!confirmed) return;
 
     try {
-      // ✅ Clean API call
-      await api.delete(`/dashboard/admin/salons/${id}`);
+      await api.delete(
+        `/dashboard/admin/salons/${business.id}`
+      );
 
-      alert(`✅ "${name}" deleted successfully`);
-      await load();
+      setBusinesses((current) =>
+        current.filter(
+          (item) => item.id !== business.id
+        )
+      );
+
+      toast.success("Home service deleted");
     } catch (e: any) {
-      alert(`❌ Delete failed: ${e?.message}`);
+      toast.error(
+        e?.message || "Failed to delete home service"
+      );
     }
+  }
+
+  const hasFilters =
+    searchTerm.trim() ||
+    statusFilter !== "all";
+
+  function clearFilters() {
+    setSearchTerm("");
+    setStatusFilter("all");
   }
 
   return (
-    <div className="p-6">
-      <div className="mx-auto max-w-5xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Home Service Salons</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage home-based beauty service providers
-            </p>
+    <div className="mx-auto max-w-7xl space-y-6">
+      {/* Header */}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-sm font-medium text-primary-600">
+            Operations
+          </p>
+
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+            Home Services
+          </h1>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Manage beauty businesses that provide services
+            at customer locations.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            router.push(
+              "/admin/salons/create?type=home"
+            )
+          }
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+        >
+          <Plus className="h-4 w-4" />
+          Add home service
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <SummaryCard
+          label="Total home services"
+          value={stats.total}
+          icon={Home}
+        />
+
+        <SummaryCard
+          label="Active"
+          value={stats.active}
+          icon={CheckCircle2}
+        />
+
+        <SummaryCard
+          label="Inactive"
+          value={stats.inactive}
+          icon={UserCheck}
+        />
+      </div>
+
+      {/* Filters */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+            <input
+              value={searchTerm}
+              onChange={(e) =>
+                setSearchTerm(e.target.value)
+              }
+              placeholder="Search business, email or phone..."
+              className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+            />
           </div>
 
-          <Link
-            href="/admin/salons/create?type=home"
-            className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black transition"
+          <select
+            value={statusFilter}
+            onChange={(e) =>
+              setStatusFilter(
+                e.target.value as StatusFilter
+              )
+            }
+            className="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
           >
-            + Add Home Service
-          </Link>
-        </div>
+            <option value="all">
+              All statuses
+            </option>
+            <option value="active">
+              Active
+            </option>
+            <option value="inactive">
+              Inactive
+            </option>
+          </select>
 
-        {/* Info Box */}
-        <div className="mb-6 bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <div className="flex items-start">
-            <svg
-              className="w-5 h-5 text-purple-600 mr-3 mt-0.5"
-              fill="currentColor"
-              viewBox="0 0 20 20"
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
             >
-              <path
-                fillRule="evenodd"
-                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <div>
-              <p className="text-sm font-semibold text-purple-800">About Home Service Salons</p>
-              <p className="text-sm text-purple-700 mt-1">
-                Home service salons provide beauty services at customer locations. They don't have
-                physical branches and services are delivered on-demand.
-              </p>
-            </div>
-          </div>
+              Clear
+            </button>
+          )}
         </div>
+      </div>
 
-        {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center py-12">
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        {loading ? (
+          <div className="flex min-h-[360px] items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading home services...</p>
-            </div>
-          </div>
-        )}
+              <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-primary-500" />
 
-        {/* Error State */}
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-            <div className="flex items-start">
-              <svg
-                className="w-5 h-5 text-red-500 mr-2 mt-0.5"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <p className="text-sm text-red-700">
-                <strong className="font-semibold">Error:</strong> {error}
+              <p className="mt-3 text-sm text-gray-500">
+                Loading home services...
               </p>
             </div>
           </div>
-        )}
+        ) : filteredBusinesses.length === 0 ? (
+          <div className="flex min-h-[360px] flex-col items-center justify-center px-6 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
+              <Home className="h-6 w-6 text-gray-400" />
+            </div>
 
-        {/* Table */}
-        {!loading && !error && (
-          <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Name</th>
-                  <th className="px-4 py-3 text-left font-semibold">Contact</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
-                  <th className="px-4 py-3 text-left font-semibold">Created</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {salons.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50 transition">
-                    <td className="px-4 py-3 font-medium">
-                      <Link
-                        href={`/admin/salons/${s.id}`}
-                        className="text-gray-900 hover:text-pink-600 hover:underline"
-                      >
-                        {s.name}
-                      </Link>
-                      <div className="mt-1">
-                        <TypeBadge type={s.salon_type} />
-                      </div>
-                    </td>
+            <h2 className="mt-4 text-sm font-semibold text-gray-900">
+              {businesses.length === 0
+                ? "No home services yet"
+                : "No home services found"}
+            </h2>
 
-                    <td className="px-4 py-3 text-gray-600">
-                      {s.email && <div className="text-xs">📧 {s.email}</div>}
-                      {s.phone && <div className="text-xs mt-1">📱 {s.phone}</div>}
-                      {!s.email && !s.phone && (
-                        <span className="text-gray-400 text-xs">No contact info</span>
-                      )}
-                    </td>
+            <p className="mt-1 max-w-sm text-sm text-gray-500">
+              {businesses.length === 0
+                ? "Add your first home-service beauty business to Glowee."
+                : "Try changing your search or status filter."}
+            </p>
 
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleToggleStatus(s.id, s.name, s.is_active)}
-                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold border transition ${
-                          s.is_active
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                            : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200"
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                            s.is_active ? "bg-emerald-500" : "bg-gray-400"
-                          }`}
-                        />
-                        {s.is_active ? "Active" : "Disabled"}
-                      </button>
-                    </td>
-
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <Link
-                          href={`/admin/salons/${s.id}/edit`}
-                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition"
-                        >
-                          ✏️ Edit
-                        </Link>
-
-                        <button
-                          onClick={() => onDelete(s.id, s.name)}
-                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition"
-                        >
-                          🗑 Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-
-                {/* Empty State */}
-                {salons.length === 0 && (
-                  <tr>
-                    <td className="px-4 py-12 text-center text-gray-500" colSpan={5}>
-                      <div className="flex flex-col items-center">
-                        <svg
-                          className="w-12 h-12 text-gray-400 mb-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                          />
-                        </svg>
-                        <p className="text-sm font-medium">No home service salons yet</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Create a salon with "Home Service" type to see it here
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            {businesses.length === 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/admin/salons/create?type=home"
+                  )
+                }
+                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+              >
+                <Plus className="h-4 w-4" />
+                Add home service
+              </button>
+            )}
           </div>
+        ) : (
+          <>
+            <div className="divide-y divide-gray-100">
+              {filteredBusinesses.map(
+                (business) => (
+                  <HomeServiceRow
+                    key={business.id}
+                    business={business}
+                    onView={() =>
+                      router.push(
+                        `/admin/salons/${business.id}`
+                      )
+                    }
+                    onToggle={() =>
+                      handleToggleStatus(
+                        business
+                      )
+                    }
+                    onDelete={() =>
+                      handleDelete(business)
+                    }
+                  />
+                )
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 px-5 py-3 text-sm text-gray-500">
+              Showing {filteredBusinesses.length} of{" "}
+              {businesses.length} home service
+              {businesses.length !== 1 ? "s" : ""}
+            </div>
+          </>
         )}
       </div>
     </div>
+  );
+}
+
+function HomeServiceRow({
+  business,
+  onView,
+  onToggle,
+  onDelete,
+}: {
+  business: HomeService;
+  onView: () => void;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-5 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 items-start gap-4">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
+          <Home className="h-5 w-5 text-gray-500" />
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-base font-semibold text-gray-900">
+              {business.name}
+            </h3>
+
+            <StatusBadge
+              active={business.is_active}
+            />
+
+            <span className="inline-flex rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+              Home service
+            </span>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-500">
+            {business.email && (
+              <span className="inline-flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 text-gray-400" />
+                {business.email}
+              </span>
+            )}
+
+            {business.phone && (
+              <span className="inline-flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5 text-gray-400" />
+                {business.phone}
+              </span>
+            )}
+
+            {business.created_at && (
+              <span>
+                Added{" "}
+                {new Date(
+                  business.created_at
+                ).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+
+          {business.about && (
+            <p className="mt-3 max-w-3xl truncate text-sm text-gray-500">
+              {business.about}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2 pl-[72px] lg:pl-0">
+        <button
+          type="button"
+          onClick={onToggle}
+          className={
+            business.is_active
+              ? "inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+              : "inline-flex h-9 items-center gap-2 rounded-lg bg-primary-600 px-3 text-xs font-medium text-white transition hover:bg-primary-700"
+          }
+        >
+          <UserCheck className="h-3.5 w-3.5" />
+          {business.is_active
+            ? "Disable"
+            : "Approve"}
+        </button>
+
+        <button
+          type="button"
+          onClick={onView}
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          View
+        </button>
+
+        <button
+          type="button"
+          onClick={onDelete}
+          title="Delete home service"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: number;
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500">
+            {label}
+          </p>
+
+          <p className="mt-2 text-3xl font-semibold text-gray-900">
+            {value}
+          </p>
+        </div>
+
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+          <Icon className="h-5 w-5 text-primary-600" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({
+  active,
+}: {
+  active: boolean;
+}) {
+  return (
+    <span
+      className={
+        active
+          ? "inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700"
+          : "inline-flex rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600"
+      }
+    >
+      {active ? "Active" : "Inactive"}
+    </span>
   );
 }
