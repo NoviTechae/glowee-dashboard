@@ -2,74 +2,129 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { useParams } from "next/navigation";
 import Link from "next/link";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CircleDollarSign,
+  CreditCard,
+  ExternalLink,
+  RefreshCw,
+  UserRound,
+  WalletCards,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { api } from "@/lib/api";
 
 type PaymentDetails = {
   id: string;
   user_id?: string | number;
+
   provider: string;
   type: string;
   status: string;
+
   amount_aed: number;
   fee_aed?: number;
   net_amount_aed?: number;
+
   provider_payment_id?: string | null;
   provider_customer_id?: string | null;
   provider_session_id?: string | null;
+
   payment_method_type?: string | null;
   card_last4?: string | null;
   card_brand?: string | null;
+
   error_message?: string | null;
   error_code?: string | null;
-  metadata?: any;
+
+  metadata?: Record<string, any> | null;
+
   created_at: string;
   updated_at?: string | null;
   authorized_at?: string | null;
   succeeded_at?: string | null;
   failed_at?: string | null;
   refunded_at?: string | null;
+
   booking_id?: string | null;
   gift_id?: string | null;
   wallet_transaction_id?: string | null;
+
   user_name?: string | null;
   user_phone?: string | null;
   user_email?: string | null;
+
   salon_name?: string | null;
   branch_name?: string | null;
+
   booking_scheduled_at?: string | null;
   booking_status?: string | null;
 };
 
 function money(value?: number | null) {
-  return `${Number(value || 0).toFixed(0)} AED`;
+  return `AED ${Number(value || 0).toFixed(2)}`;
 }
 
-function fmtDate(value?: string | null) {
+function formatDate(value?: string | null) {
   if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString();
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return date.toLocaleString("en-AE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Dubai",
+  });
 }
 
 function prettify(value?: string | null) {
   if (!value) return "-";
+
   return value
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function statusClasses(status?: string | null) {
-  if (status === "succeeded") return "bg-green-50 text-green-700 border-green-200";
-  if (status === "failed") return "bg-red-50 text-red-700 border-red-200";
-  if (status === "refunded") return "bg-orange-50 text-orange-700 border-orange-200";
-  if (status === "pending") return "bg-yellow-50 text-yellow-700 border-yellow-200";
-  if (status === "authorized" || status === "captured") {
-    return "bg-blue-50 text-blue-700 border-blue-200";
+  if (status === "succeeded") {
+    return "bg-emerald-50 text-emerald-700";
   }
-  if (status === "cancelled") return "bg-gray-100 text-gray-700 border-gray-200";
-  return "bg-gray-50 text-gray-700 border-gray-200";
+
+  if (status === "failed") {
+    return "bg-red-50 text-red-700";
+  }
+
+  if (
+    status === "refunded" ||
+    status === "refunded_to_wallet"
+  ) {
+    return "bg-orange-50 text-orange-700";
+  }
+
+  if (status === "pending") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  if (
+    status === "authorized" ||
+    status === "captured"
+  ) {
+    return "bg-blue-50 text-blue-700";
+  }
+
+  return "bg-gray-100 text-gray-600";
+}
+
+function hasMetadata(metadata: Record<string, any>) {
+  return Object.keys(metadata).length > 0;
 }
 
 function prettyJson(value: any) {
@@ -82,47 +137,85 @@ function prettyJson(value: any) {
 
 export default function PaymentDetailsPage() {
   const params = useParams();
-  const router = useRouter();
   const id = params.id as string;
 
-  const [payment, setPayment] = useState<PaymentDetails | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [payment, setPayment] =
+    useState<PaymentDetails | null>(null);
 
-  useEffect(() => {
-    loadPayment();
-  }, []);
+  const [loading, setLoading] =
+    useState(true);
 
-  async function loadPayment() {
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  async function loadPayment(showRefreshing = false) {
     try {
-      setLoading(true);
-      const res = await api.get(`/dashboard/admin/payments/${id}`);
-      setPayment(res.payment);
-    } catch (error) {
+      if (showRefreshing) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      const response = await api.get(
+        `/dashboard/admin/payments/${id}`
+      );
+
+      setPayment(response.payment);
+    } catch (error: any) {
       console.error(error);
-      alert("Failed to load payment details");
+
+      toast.error(
+        error?.message ||
+          "Failed to load payment details"
+      );
+
+      setPayment(null);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
-  const metadata = payment?.metadata || {};
+  useEffect(() => {
+    loadPayment();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const metadata =
+    payment?.metadata &&
+    typeof payment.metadata === "object"
+      ? payment.metadata
+      : {};
 
   const customerName = useMemo(() => {
-    return payment?.user_name || metadata?.name || "No name";
+    return (
+      payment?.user_name ||
+      metadata?.name ||
+      "Unknown customer"
+    );
   }, [payment, metadata]);
 
   const customerPhone = useMemo(() => {
-    return payment?.user_phone || metadata?.phone || metadata?.recipient_phone || "-";
+    return (
+      payment?.user_phone ||
+      metadata?.phone ||
+      metadata?.recipient_phone ||
+      "-"
+    );
   }, [payment, metadata]);
 
   const customerEmail = useMemo(() => {
-    return payment?.user_email || metadata?.email || "No email";
+    return (
+      payment?.user_email ||
+      metadata?.email ||
+      "-"
+    );
   }, [payment, metadata]);
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 text-sm text-gray-500 shadow-sm">
+      <div className="mx-auto max-w-7xl">
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
           Loading payment details...
         </div>
       </div>
@@ -131,185 +224,436 @@ export default function PaymentDetailsPage() {
 
   if (!payment) {
     return (
-      <div className="p-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 text-sm text-gray-500 shadow-sm">
-          Payment not found.
+      <div className="mx-auto max-w-7xl space-y-5">
+        <Link
+          href="/admin/payments"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to payments
+        </Link>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
+          <p className="text-sm font-medium text-gray-900">
+            Payment not found
+          </p>
+
+          <p className="mt-1 text-sm text-gray-500">
+            This transaction may no longer be available.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <button
-                onClick={() => router.back()}
-                className="mb-4 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                ← Back
-              </button>
+    <div className="mx-auto max-w-7xl space-y-6">
+      {/* Back */}
+      <Link
+        href="/admin/payments"
+        className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to payments
+      </Link>
 
-              <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-                Payment Details
-              </h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Review transaction details, linked booking info, and provider metadata.
-              </p>
-            </div>
+      {/* Header */}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div>
+          <p className="text-sm font-medium text-primary-600">
+            Payment details
+          </p>
 
-            <button
-              onClick={loadPayment}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-2xl font-semibold tracking-tight text-gray-900">
+              {payment.id.slice(0, 8)}
+            </h1>
+
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusClasses(
+                payment.status
+              )}`}
             >
-              Refresh
-            </button>
+              {prettify(payment.status)}
+            </span>
           </div>
+
+          <p className="mt-2 text-sm text-gray-500">
+            Created {formatDate(payment.created_at)}
+          </p>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-6 py-5">
-                <h2 className="text-lg font-black text-gray-900">Transaction Overview</h2>
-              </div>
+        <button
+          type="button"
+          onClick={() => loadPayment(true)}
+          disabled={refreshing}
+          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw
+            className={`h-4 w-4 ${
+              refreshing ? "animate-spin" : ""
+            }`}
+          />
 
-              <div className="grid gap-4 p-6 md:grid-cols-2">
-                <Info label="Transaction ID" value={payment.id} mono />
-                <Info label="Provider Payment ID" value={payment.provider_payment_id || "-"} mono />
-                <Info label="Provider Customer ID" value={payment.provider_customer_id || "-"} mono />
-                <Info label="Provider Session ID" value={payment.provider_session_id || "-"} mono />
+          Refresh
+        </button>
+      </div>
 
-                <Info label="Provider" value={prettify(payment.provider)} />
-                <Info label="Type" value={prettify(payment.type)} />
-                <Info
-                  label="Status"
-                  value={
-                    <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusClasses(
-                        payment.status
-                      )}`}
-                    >
-                      {prettify(payment.status)}
-                    </span>
+      {/* Summary */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <SummaryCard
+          label="Customer paid"
+          value={money(payment.amount_aed)}
+          icon={CircleDollarSign}
+        />
+
+        <SummaryCard
+          label="Payment fee"
+          value={money(payment.fee_aed)}
+          icon={CreditCard}
+        />
+
+        <SummaryCard
+          label="Net amount"
+          value={money(payment.net_amount_aed)}
+          icon={WalletCards}
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
+        {/* Left */}
+        <div className="space-y-6">
+          {/* Payment information */}
+          <Section title="Payment information">
+            <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+              <DetailRow
+                label="Provider"
+                value={prettify(payment.provider)}
+              />
+
+              <DetailRow
+                label="Transaction type"
+                value={prettify(payment.type)}
+              />
+
+              <DetailRow
+                label="Payment method"
+                value={prettify(
+                  payment.payment_method_type
+                )}
+              />
+
+              <DetailRow
+                label="Card"
+                value={
+                  payment.card_brand ||
+                  payment.card_last4
+                    ? `${prettify(
+                        payment.card_brand
+                      )}${
+                        payment.card_last4
+                          ? ` •••• ${payment.card_last4}`
+                          : ""
+                      }`
+                    : "-"
+                }
+              />
+
+              <DetailRow
+                label="Provider payment ID"
+                value={
+                  payment.provider_payment_id ||
+                  "-"
+                }
+                mono
+              />
+
+              <DetailRow
+                label="Provider customer ID"
+                value={
+                  payment.provider_customer_id ||
+                  "-"
+                }
+                mono
+              />
+
+              <DetailRow
+                label="Provider session ID"
+                value={
+                  payment.provider_session_id ||
+                  "-"
+                }
+                mono
+              />
+
+              <DetailRow
+                label="Transaction ID"
+                value={payment.id}
+                mono
+              />
+            </div>
+          </Section>
+
+          {/* Linked records */}
+          <Section title="Linked records">
+            <div className="space-y-5">
+              {payment.booking_id ? (
+                <LinkedRecord
+                  icon={CalendarDays}
+                  title="Booking"
+                  subtitle={
+                    payment.salon_name
+                      ? `${payment.salon_name}${
+                          payment.branch_name
+                            ? ` · ${payment.branch_name}`
+                            : ""
+                        }`
+                      : "Glowee booking"
                   }
+                  details={[
+                    payment.booking_status
+                      ? prettify(
+                          payment.booking_status
+                        )
+                      : null,
+                    payment.booking_scheduled_at
+                      ? formatDate(
+                          payment.booking_scheduled_at
+                        )
+                      : null,
+                  ]}
+                  href={`/admin/bookings/${payment.booking_id}`}
+                  id={payment.booking_id}
                 />
-                <Info label="Payment Method" value={prettify(payment.payment_method_type)} />
+              ) : null}
 
-                <Info label="Card Brand" value={prettify(payment.card_brand)} />
-                <Info label="Card Last4" value={payment.card_last4 ? `•••• ${payment.card_last4}` : "-"} />
-                <Info label="Amount" value={money(payment.amount_aed)} />
-                <Info label="Fee" value={money(payment.fee_aed)} />
-                <Info label="Net Amount" value={money(payment.net_amount_aed)} />
-                <Info label="Created At" value={fmtDate(payment.created_at)} />
-                <Info label="Authorized At" value={fmtDate(payment.authorized_at)} />
-                <Info label="Succeeded At" value={fmtDate(payment.succeeded_at)} />
-                <Info label="Failed At" value={fmtDate(payment.failed_at)} />
-                <Info label="Refunded At" value={fmtDate(payment.refunded_at)} />
-              </div>
+              {payment.gift_id ? (
+                <LinkedRecord
+                  icon={WalletCards}
+                  title="Gift"
+                  subtitle="Glowee gift purchase"
+                  href={`/admin/gifts/${payment.gift_id}`}
+                  id={payment.gift_id}
+                />
+              ) : null}
+
+              {payment.wallet_transaction_id ? (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-gray-500">
+                      <WalletCards className="h-4 w-4" />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">
+                        Wallet transaction
+                      </p>
+
+                      <p className="mt-1 break-all font-mono text-xs text-gray-500">
+                        {
+                          payment.wallet_transaction_id
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {!payment.booking_id &&
+              !payment.gift_id &&
+              !payment.wallet_transaction_id ? (
+                <p className="text-sm text-gray-500">
+                  No linked booking, gift or wallet
+                  transaction.
+                </p>
+              ) : null}
             </div>
+          </Section>
 
-            <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-6 py-5">
-                <h2 className="text-lg font-black text-gray-900">Linked References</h2>
-              </div>
+          {/* Error */}
+          {payment.error_message ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+              <p className="text-sm font-semibold text-red-800">
+                Payment error
+              </p>
 
-              <div className="grid gap-4 p-6 md:grid-cols-2">
-                <Info label="Booking ID" value={payment.booking_id || "-"} mono />
-                <Info label="Gift ID" value={payment.gift_id || "-"} mono />
-                <Info label="Wallet Transaction ID" value={payment.wallet_transaction_id || "-"} mono />
-                <Info label="Booking Status" value={prettify(payment.booking_status)} />
-                <Info label="Salon" value={payment.salon_name || "-"} />
-                <Info label="Branch" value={payment.branch_name || "-"} />
-                <Info label="Scheduled Booking Time" value={fmtDate(payment.booking_scheduled_at)} />
-              </div>
+              <p className="mt-2 text-sm text-red-700">
+                {payment.error_message}
+              </p>
+
+              {payment.error_code ? (
+                <p className="mt-2 font-mono text-xs text-red-600">
+                  Code: {payment.error_code}
+                </p>
+              ) : null}
             </div>
+          ) : null}
 
-            {payment.error_message ? (
-              <div className="rounded-3xl border border-red-200 bg-red-50 shadow-sm">
-                <div className="border-b border-red-100 px-6 py-5">
-                  <h2 className="text-lg font-black text-red-700">Error Details</h2>
-                </div>
+          {/* Metadata */}
+          {hasMetadata(metadata) ? (
+            <Section title="Provider metadata">
+              <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+                {metadata?.gift_code ? (
+                  <DetailRow
+                    label="Gift code"
+                    value={metadata.gift_code}
+                  />
+                ) : null}
 
-                <div className="space-y-2 p-6">
-                  <p className="text-sm font-medium text-red-700">{payment.error_message}</p>
-                  <p className="text-xs font-semibold text-red-500">
-                    Code: {payment.error_code || "-"}
-                  </p>
-                </div>
+                {metadata?.gift_type ? (
+                  <DetailRow
+                    label="Gift type"
+                    value={prettify(
+                      metadata.gift_type
+                    )}
+                  />
+                ) : null}
+
+                {metadata?.recipient_phone ? (
+                  <DetailRow
+                    label="Recipient phone"
+                    value={
+                      metadata.recipient_phone
+                    }
+                  />
+                ) : null}
+
+                {metadata?.phone ? (
+                  <DetailRow
+                    label="Phone"
+                    value={metadata.phone}
+                  />
+                ) : null}
               </div>
-            ) : null}
 
-            <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-6 py-5">
-                <h2 className="text-lg font-black text-gray-900">Metadata</h2>
-              </div>
+              <details className="mt-5 rounded-xl border border-gray-200 bg-gray-50">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700">
+                  View raw metadata
+                </summary>
 
-              <div className="space-y-4 p-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Info label="Gift Code" value={metadata?.gift_code || "-"} />
-                  <Info label="Gift Type" value={metadata?.gift_type || "-"} />
-                  <Info label="Recipient Phone" value={metadata?.recipient_phone || "-"} />
-                  <Info label="Phone" value={metadata?.phone || "-"} />
-                </div>
-
-                <div className="rounded-2xl bg-gray-950 p-4">
-                  <pre className="overflow-x-auto text-xs text-gray-100">
+                <div className="border-t border-gray-200 p-4">
+                  <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-all rounded-xl bg-gray-950 p-4 text-xs text-gray-100">
                     {prettyJson(metadata)}
                   </pre>
                 </div>
+              </details>
+            </Section>
+          ) : null}
+        </div>
+
+        {/* Right */}
+        <div className="space-y-6">
+          {/* Customer */}
+          <Section title="Customer">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700">
+                {customerName
+                  .charAt(0)
+                  .toUpperCase()}
+              </div>
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-gray-900">
+                  {customerName}
+                </p>
+
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Glowee customer
+                </p>
               </div>
             </div>
-          </div>
 
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-6 py-5">
-                <h2 className="text-lg font-black text-gray-900">Customer</h2>
-              </div>
+            <div className="space-y-4">
+              <InlineDetail
+                label="Phone"
+                value={customerPhone}
+              />
 
-              <div className="space-y-4 p-6">
-                <InlineInfo label="Name" value={customerName} />
-                <InlineInfo label="Phone" value={customerPhone} />
-                <InlineInfo label="Email" value={customerEmail} />
-                <InlineInfo label="User ID" value={payment.user_id ? String(payment.user_id) : "-"} mono />
-              </div>
+              <InlineDetail
+                label="Email"
+                value={customerEmail}
+              />
+
+              <InlineDetail
+                label="User ID"
+                value={
+                  payment.user_id
+                    ? String(payment.user_id)
+                    : "-"
+                }
+                mono
+              />
             </div>
 
-            <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-6 py-5">
-                <h2 className="text-lg font-black text-gray-900">Quick Actions</h2>
-              </div>
+            {payment.user_id ? (
+              <Link
+                href={`/admin/users/${payment.user_id}`}
+                className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-primary-600 transition hover:text-primary-700"
+              >
+                <UserRound className="h-4 w-4" />
+                View customer
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
+            ) : null}
+          </Section>
 
-              <div className="space-y-3 p-6">
-                {payment.user_id ? (
-                  <Link
-                    href={`/admin/users/${payment.user_id}`}
-                    className="block rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                  >
-                    View User
-                  </Link>
-                ) : null}
+          {/* Timeline */}
+          <Section title="Payment timeline">
+            <TimelineItem
+              label="Created"
+              value={formatDate(
+                payment.created_at
+              )}
+              active
+            />
 
-                {payment.booking_id ? (
-                  <Link
-                    href={`/admin/bookings/${payment.booking_id}`}
-                    className="block rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                  >
-                    View Booking
-                  </Link>
-                ) : null}
+            <TimelineItem
+              label="Authorized"
+              value={formatDate(
+                payment.authorized_at
+              )}
+              active={
+                !!payment.authorized_at
+              }
+            />
 
-                <button
-                  onClick={loadPayment}
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                >
-                  Refresh Details
-                </button>
-              </div>
-            </div>
+            <TimelineItem
+              label="Succeeded"
+              value={formatDate(
+                payment.succeeded_at
+              )}
+              active={
+                !!payment.succeeded_at
+              }
+            />
+
+            <TimelineItem
+              label="Failed"
+              value={formatDate(
+                payment.failed_at
+              )}
+              active={!!payment.failed_at}
+            />
+
+            <TimelineItem
+              label="Refunded"
+              value={formatDate(
+                payment.refunded_at
+              )}
+              active={
+                !!payment.refunded_at
+              }
+              last
+            />
+          </Section>
+
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs leading-5 text-gray-500">
+              Refunds are currently not processed
+              from the Glowee Admin Dashboard.
+              Payment records shown here are
+              read-only.
+            </p>
           </div>
         </div>
       </div>
@@ -317,7 +661,59 @@ export default function PaymentDetailsPage() {
   );
 }
 
-function Info({
+function SummaryCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-gray-500">
+            {label}
+          </p>
+
+          <p className="mt-2 text-2xl font-semibold text-gray-900">
+            {value}
+          </p>
+        </div>
+
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+          <Icon className="h-5 w-5 text-primary-600" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white">
+      <div className="border-b border-gray-100 px-5 py-4">
+        <h2 className="text-sm font-semibold text-gray-900">
+          {title}
+        </h2>
+      </div>
+
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+function DetailRow({
   label,
   value,
   mono = false,
@@ -327,18 +723,25 @@ function Info({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
         {label}
       </p>
-      <div className={`mt-2 font-medium text-gray-900 ${mono ? "break-all font-mono text-xs" : ""}`}>
+
+      <div
+        className={`mt-1.5 text-sm font-medium text-gray-900 ${
+          mono
+            ? "break-all font-mono text-xs"
+            : ""
+        }`}
+      >
         {value}
       </div>
     </div>
   );
 }
 
-function InlineInfo({
+function InlineDetail({
   label,
   value,
   mono = false,
@@ -348,11 +751,120 @@ function InlineInfo({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-3">
-      <p className="text-sm font-medium text-gray-500">{label}</p>
-      <p className={`max-w-[65%] text-right font-semibold text-gray-900 ${mono ? "break-all font-mono text-xs" : ""}`}>
+    <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+      <p className="text-sm text-gray-500">
+        {label}
+      </p>
+
+      <p
+        className={`max-w-[65%] text-right text-sm font-medium text-gray-900 ${
+          mono
+            ? "break-all font-mono text-xs"
+            : ""
+        }`}
+      >
         {value}
       </p>
+    </div>
+  );
+}
+
+function TimelineItem({
+  label,
+  value,
+  active,
+  last = false,
+}: {
+  label: string;
+  value: string;
+  active: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div className="relative flex gap-3">
+      {!last ? (
+        <div className="absolute left-[5px] top-4 h-full w-px bg-gray-200" />
+      ) : null}
+
+      <div
+        className={`relative mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 ${
+          active
+            ? "border-primary-500 bg-primary-100"
+            : "border-gray-300 bg-white"
+        }`}
+      />
+
+      <div className={last ? "" : "pb-5"}>
+        <p className="text-sm font-medium text-gray-900">
+          {label}
+        </p>
+
+        <p className="mt-1 text-xs text-gray-500">
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LinkedRecord({
+  icon: Icon,
+  title,
+  subtitle,
+  details = [],
+  href,
+  id,
+}: {
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
+  title: string;
+  subtitle: string;
+  details?: (string | null)[];
+  href: string;
+  id: string;
+}) {
+  const visibleDetails = details.filter(
+    Boolean
+  ) as string[];
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-gray-500">
+            <Icon className="h-4 w-4" />
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900">
+              {title}
+            </p>
+
+            <p className="mt-1 text-sm text-gray-600">
+              {subtitle}
+            </p>
+
+            {visibleDetails.length ? (
+              <p className="mt-1 text-xs text-gray-500">
+                {visibleDetails.join(" · ")}
+              </p>
+            ) : null}
+
+            <p className="mt-2 break-all font-mono text-[11px] text-gray-400">
+              {id}
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href={href}
+          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"
+        >
+          View
+          <ExternalLink className="h-3 w-3" />
+        </Link>
+      </div>
     </div>
   );
 }
