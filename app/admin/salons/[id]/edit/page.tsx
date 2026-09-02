@@ -121,22 +121,22 @@ export default function EditSalonPage() {
 
     return (
       name.trim() !==
-        (originalSalon.name || "").trim() ||
+      (originalSalon.name || "").trim() ||
       salonType !== originalSalon.salon_type ||
       clean(phone) !==
-        (originalSalon.phone || null) ||
+      (originalSalon.phone || null) ||
       clean(email) !==
-        (originalSalon.email || null) ||
+      (originalSalon.email || null) ||
       clean(about) !==
-        (originalSalon.about || null) ||
+      (originalSalon.about || null) ||
       clean(website) !==
-        (originalSalon.website || null) ||
+      (originalSalon.website || null) ||
       clean(instagram) !==
-        (originalSalon.instagram || null) ||
+      (originalSalon.instagram || null) ||
       clean(logoUrl) !==
-        (originalSalon.logo_url || null) ||
+      (originalSalon.logo_url || null) ||
       clean(coverUrl) !==
-        (originalSalon.cover_url || null) ||
+      (originalSalon.cover_url || null) ||
       isActive !== Boolean(originalSalon.is_active)
     );
   }, [
@@ -246,7 +246,7 @@ export default function EditSalonPage() {
       {/* Header */}
       <div>
         <p className="text-sm font-medium text-primary-600">
-          Salon details
+          Business details
         </p>
 
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
@@ -342,12 +342,12 @@ export default function EditSalonPage() {
 
             {salonType !==
               originalSalon.salon_type && (
-              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Changing the business type does not
-                automatically create, delete, or update its
-                existing locations.
-              </div>
-            )}
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Changing the business type does not
+                  automatically create, delete, or update its
+                  existing locations.
+                </div>
+              )}
           </div>
 
           {/* Contact */}
@@ -503,18 +503,16 @@ export default function EditSalonPage() {
             onClick={() =>
               setIsActive((current) => !current)
             }
-            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition ${
-              isActive
+            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition ${isActive
                 ? "bg-primary-600"
                 : "bg-gray-200"
-            }`}
+              }`}
           >
             <span
-              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${
-                isActive
+              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${isActive
                   ? "left-6"
                   : "left-1"
-              }`}
+                }`}
             />
           </button>
         </div>
@@ -624,11 +622,10 @@ function TypeCard({
     <button
       type="button"
       onClick={onClick}
-      className={`relative rounded-2xl border p-4 text-left transition ${
-        active
+      className={`relative rounded-2xl border p-4 text-left transition ${active
           ? "border-primary-300 bg-primary-50/50 ring-1 ring-primary-200"
           : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-      }`}
+        }`}
     >
       {active && (
         <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary-600 text-white">
@@ -637,11 +634,10 @@ function TypeCard({
       )}
 
       <div
-        className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-          active
+        className={`flex h-10 w-10 items-center justify-center rounded-xl ${active
             ? "bg-white text-primary-600"
             : "bg-gray-50 text-gray-500"
-        }`}
+          }`}
       >
         <Icon className="h-5 w-5" />
       </div>
